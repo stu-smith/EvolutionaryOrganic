@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using EvolutionaryOrganic.App.Rendering;
@@ -37,6 +38,15 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _effectsManager?.Dispose();
+        try
+        {
+            // The evolution pane edits settings live, so persist them on the way out.
+            Settings.Save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Failing to save preferences must not block shutdown.
+        }
         base.OnExit(e);
     }
 

@@ -130,28 +130,67 @@
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="Transparent"
                           ResizeBehavior="PreviousAndNext" />
 
-            <Border Grid.Column="2" Margin="0,10,10,10" Padding="14" CornerRadius="8" BorderThickness="1"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <TextBlock Text="Genome" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding Summary}" Style="{StaticResource SecondaryText}" Margin="0,4,0,0" />
-                        <TextBlock Style="{StaticResource SecondaryText}">
-                            <Run Text="Surface: " /><Run Text="{Binding SurfaceSummary, Mode=OneWay}" />
-                        </TextBlock>
+            <Grid Grid.Column="2" Margin="0,10,10,10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Padding="14" CornerRadius="8" BorderThickness="1"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <TextBlock Text="Genome" FontSize="20" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Summary}" Style="{StaticResource SecondaryText}" Margin="0,4,0,0" />
+                            <TextBlock Style="{StaticResource SecondaryText}">
+                                <Run Text="Surface: " /><Run Text="{Binding SurfaceSummary, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
+                        <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" Style="{StaticResource SecondaryText}"
+                                   Text="Drag to rotate · wheel or right-drag to zoom · middle or Shift-drag to pan · double-click to reset view" />
+                        <TreeView ItemsSource="{Binding GenomeTree}" BorderThickness="0" Background="Transparent">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                    <Setter Property="IsExpanded" Value="True" />
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                        </TreeView>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="1" Margin="0,10,0,0" Padding="14" CornerRadius="8" BorderThickness="1"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    <StackPanel>
+                        <TextBlock Text="Evolution" Style="{StaticResource SectionHeader}" />
+                        <DockPanel Margin="0,4,0,0">
+                            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding MutationStrength, StringFormat={}{0:P0}}" />
+                            <TextBlock Text="Mutation strength" Width="130" VerticalAlignment="Center" />
+                            <Slider Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                    Value="{Binding MutationStrength}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding StructuralMutationRate, StringFormat={}{0:P0}}" />
+                            <TextBlock Text="Structural mutations" Width="130" VerticalAlignment="Center" />
+                            <Slider Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                    Value="{Binding StructuralMutationRate}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding MaxSpheres, StringFormat={}{0:N0}}" />
+                            <TextBlock Text="Sphere limit" Width="130" VerticalAlignment="Center" />
+                            <Slider Minimum="250" Maximum="10000" SmallChange="250" LargeChange="1000"
+                                    TickFrequency="250" IsSnapToTickEnabled="True"
+                                    Value="{Binding MaxSpheres}" />
+                        </DockPanel>
+                        <TextBlock Text="Changes apply to the next re-roll." Margin="0,8,0,0"
+                                   Style="{StaticResource SecondaryText}" />
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" Style="{StaticResource SecondaryText}"
-                               Text="Drag to rotate · wheel or right-drag to zoom · middle or Shift-drag to pan · double-click to reset view" />
-                    <TreeView ItemsSource="{Binding GenomeTree}" BorderThickness="0" Background="Transparent">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                                <Setter Property="IsExpanded" Value="True" />
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                    </TreeView>
-                </DockPanel>
-            </Border>
+                </Border>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>

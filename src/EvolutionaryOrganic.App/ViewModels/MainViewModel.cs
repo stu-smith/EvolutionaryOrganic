@@ -49,7 +49,35 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(BackCommand))]
     private int _historyDepth;
 
+    /// <summary>0 = subtle, 1 = wild. Takes effect on the next re-roll.</summary>
+    public double MutationStrength
+    {
+        get => _settings().MutationStrength;
+        set => SetSetting(_settings().MutationStrength, value, v => _settings().MutationStrength = v);
+    }
+
+    /// <summary>Chance that a mutation alters structure rather than parameters. Takes effect on the next re-roll.</summary>
+    public double StructuralMutationRate
+    {
+        get => _settings().StructuralMutationRate;
+        set => SetSetting(_settings().StructuralMutationRate, value, v => _settings().StructuralMutationRate = v);
+    }
+
+    /// <summary>Upper limit on spheres per creation. Takes effect on the next re-roll.</summary>
+    public int MaxSpheres
+    {
+        get => _settings().MaxSpheres;
+        set => SetSetting(_settings().MaxSpheres, value, v => _settings().MaxSpheres = v);
+    }
+
     public void Start() => NewRandom();
+
+    private void SetSetting<T>(T current, T value, Action<T> apply, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(current, value)) return;
+        apply(value);
+        OnPropertyChanged(propertyName);
+    }
 
     /// <summary>Makes <paramref name="genome"/> the current creation and breeds new mutants from it.</summary>
     public void SetCurrent(Genome genome, bool remember = true)

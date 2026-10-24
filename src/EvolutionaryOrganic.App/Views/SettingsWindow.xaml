@@ -12,27 +12,6 @@
             <RadioButton x:Name="DarkTheme" Content="Dark" GroupName="Theme" />
         </StackPanel>
 
-        <TextBlock Text="Evolution" Style="{StaticResource SectionHeader}" />
-        <DockPanel Margin="0,4,0,0">
-            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
-                       Text="{Binding Value, ElementName=StrengthSlider, StringFormat={}{0:P0}}" />
-            <TextBlock Text="Mutation strength" Width="150" VerticalAlignment="Center" />
-            <Slider x:Name="StrengthSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" />
-        </DockPanel>
-        <DockPanel Margin="0,8,0,0">
-            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
-                       Text="{Binding Value, ElementName=StructuralSlider, StringFormat={}{0:P0}}" />
-            <TextBlock Text="Structural mutations" Width="150" VerticalAlignment="Center" />
-            <Slider x:Name="StructuralSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" />
-        </DockPanel>
-        <DockPanel Margin="0,8,0,18">
-            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
-                       Text="{Binding Value, ElementName=MaxSpheresSlider, StringFormat={}{0:N0}}" />
-            <TextBlock Text="Sphere limit" Width="150" VerticalAlignment="Center" />
-            <Slider x:Name="MaxSpheresSlider" Minimum="250" Maximum="10000" SmallChange="250" LargeChange="1000"
-                    TickFrequency="250" IsSnapToTickEnabled="True" />
-        </DockPanel>
-
         <TextBlock Text="Rendering" Style="{StaticResource SectionHeader}" />
         <CheckBox x:Name="ShadowsCheck" Content="Shadows" />
         <CheckBox x:Name="AmbientOcclusionCheck" Content="Ambient occlusion (soft contact shading)" />

@@ -13,9 +13,6 @@ public partial class SettingsWindow : Window
         SystemTheme.IsChecked = settings.Theme == AppTheme.System;
         LightTheme.IsChecked = settings.Theme == AppTheme.Light;
         DarkTheme.IsChecked = settings.Theme == AppTheme.Dark;
-        StrengthSlider.Value = settings.MutationStrength;
-        StructuralSlider.Value = settings.StructuralMutationRate;
-        MaxSpheresSlider.Value = settings.MaxSpheres;
         ShadowsCheck.IsChecked = settings.EnableShadows;
         AmbientOcclusionCheck.IsChecked = settings.EnableAmbientOcclusion;
         AntialiasingCheck.IsChecked = settings.EnableAntialiasing;
@@ -29,9 +26,6 @@ public partial class SettingsWindow : Window
         Settings.Theme = LightTheme.IsChecked == true ? AppTheme.Light
                        : DarkTheme.IsChecked == true ? AppTheme.Dark
                        : AppTheme.System;
-        Settings.MutationStrength = StrengthSlider.Value;
-        Settings.StructuralMutationRate = StructuralSlider.Value;
-        Settings.MaxSpheres = (int)MaxSpheresSlider.Value;
         Settings.EnableShadows = ShadowsCheck.IsChecked == true;
         Settings.EnableAmbientOcclusion = AmbientOcclusionCheck.IsChecked == true;
         Settings.EnableAntialiasing = AntialiasingCheck.IsChecked == true;
