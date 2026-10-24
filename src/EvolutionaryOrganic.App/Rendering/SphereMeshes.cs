@@ -5,8 +5,8 @@ using HelixToolkit.SharpDX;
 namespace EvolutionaryOrganic.App.Rendering;
 
 /// <summary>
-/// Shared unit-sphere meshes at several levels of detail. Each has normals, UVs and tangent frames,
-/// so normal and bump maps can be added later without changing the geometry.
+/// Shared unit-sphere meshes at several levels of detail. Each has normals, equirectangular UVs and tangent
+/// frames for textures and bump maps; <c>ImageBaker</c> in Core bakes images to match this exact layout.
 /// </summary>
 public static class SphereMeshes
 {

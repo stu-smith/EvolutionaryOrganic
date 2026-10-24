@@ -70,6 +70,20 @@ public sealed partial class MainViewModel : ObservableObject
         set => SetSetting(_settings().MaxSpheres, value, v => _settings().MaxSpheres = v);
     }
 
+    /// <summary>Upper limit on procedural textures per genome. Takes effect on the next re-roll.</summary>
+    public int MaxTextures
+    {
+        get => _settings().MaxTextures;
+        set => SetSetting(_settings().MaxTextures, value, v => _settings().MaxTextures = v);
+    }
+
+    /// <summary>Upper limit on procedural bump maps per genome. Takes effect on the next re-roll.</summary>
+    public int MaxBumpMaps
+    {
+        get => _settings().MaxBumpMaps;
+        set => SetSetting(_settings().MaxBumpMaps, value, v => _settings().MaxBumpMaps = v);
+    }
+
     public void Start() => NewRandom();
 
     private void SetSetting<T>(T current, T value, Action<T> apply, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
@@ -79,8 +93,11 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(propertyName);
     }
 
-    /// <summary>Makes <paramref name="genome"/> the current creation and breeds new mutants from it.</summary>
-    public void SetCurrent(Genome genome, bool remember = true)
+    /// <summary>
+    /// Makes <paramref name="genome"/> the current creation and breeds new mutants from it. Pass the genome's
+    /// <paramref name="morphology"/> if it has already been grown, to save growing it again.
+    /// </summary>
+    public void SetCurrent(Genome genome, bool remember = true, Morphology? morphology = null)
     {
         if (remember && CurrentGenome is not null)
         {
@@ -88,23 +105,29 @@ public sealed partial class MainViewModel : ObservableObject
             HistoryDepth = _history.Count;
         }
 
-        var morphology = MorphologyBuilder.Build(genome, Limits());
+        morphology ??= MorphologyBuilder.Build(genome, Limits());
         CurrentSlot.SetCreation(genome, morphology);
-        GenomeTree = [new GenomeNodeViewModel(genome.Root)];
+        GenomeTree = GenomeNodeViewModel.ForGenome(genome, morphology);
         Summary = $"Generation {genome.Generation} · {morphology.Spheres.Count:N0} spheres" +
                   (morphology.Truncated ? " (capped by sphere limit)" : string.Empty);
-        SurfaceSummary = genome.Surface.ToString();
+        SurfaceSummary = $"{genome.Surface} · {Plural(genome.Textures.Count, "texture")} · {Plural(genome.BumpMaps.Count, "bump map")}";
         RerollCommand.Execute(null);
     }
 
+    private static string Plural(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
     [RelayCommand]
-    private void NewRandom() => SetCurrent(RandomGenomeFactory.CreateGenome(_rng, _settings().MaxSpheres));
+    private void NewRandom()
+    {
+        var settings = _settings();
+        SetCurrent(RandomGenomeFactory.CreateGenome(_rng, settings.MaxSpheres, settings.MaxTextures, settings.MaxBumpMaps));
+    }
 
     [RelayCommand]
     private void Select(CreationSlotViewModel? slot)
     {
         if (slot is null || slot.IsCurrent || !slot.CanSelect) return;
-        SetCurrent(slot.Genome!);
+        SetCurrent(slot.Genome!, morphology: slot.Morphology);
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))]
@@ -132,6 +155,8 @@ public sealed partial class MainViewModel : ObservableObject
             Strength = (float)settings.MutationStrength,
             StructuralProbability = (float)settings.StructuralMutationRate,
             MaxSpheres = settings.MaxSpheres,
+            MaxTextures = settings.MaxTextures,
+            MaxBumpMaps = settings.MaxBumpMaps,
         };
         var limits = Limits();
         var ui = TaskScheduler.FromCurrentSynchronizationContext();

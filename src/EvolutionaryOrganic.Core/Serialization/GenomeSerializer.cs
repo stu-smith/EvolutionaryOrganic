@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using EvolutionaryOrganic.Core.Genetics;
 
@@ -17,7 +18,12 @@ public static class GenomeSerializer
         Converters = { new Vector3Converter() },
     };
 
+    private static readonly JsonSerializerOptions CompactOptions = new(Options) { WriteIndented = false };
+
     public static string Serialize(Genome genome) => JsonSerializer.Serialize(genome, Options);
+
+    /// <summary>Serializes any part of a genome on one line, for use as a content key.</summary>
+    public static string SerializeCompact(object value, Type type) => JsonSerializer.Serialize(value, type, CompactOptions);
 
     public static Genome Deserialize(string json)
     {
@@ -29,7 +35,20 @@ public static class GenomeSerializer
                 $"This genome uses format version {genome.FormatVersion}, but only versions up to {Genome.CurrentFormatVersion} are supported.");
         }
         if (genome.Root is null) throw new InvalidDataException("The genome has no root node.");
+        if (genome.FormatVersion < 2) MigrateFromVersion1(genome, json);
+        genome.Textures ??= [];
+        genome.BumpMaps ??= [];
         return genome;
+    }
+
+    /// <summary>Version 1 had a single roughness for the whole creation; it now belongs to each sphere.</summary>
+    private static void MigrateFromVersion1(Genome genome, string json)
+    {
+        if (JsonNode.Parse(json)?["surface"]?["roughness"] is JsonValue value && value.TryGetValue(out float roughness))
+        {
+            foreach (var sphere in genome.Root.DescendantsAndSelf().OfType<SphereNode>()) sphere.Roughness = roughness;
+        }
+        genome.FormatVersion = Genome.CurrentFormatVersion;
     }
 
     public static void Save(Genome genome, string path) => File.WriteAllText(path, Serialize(genome));
