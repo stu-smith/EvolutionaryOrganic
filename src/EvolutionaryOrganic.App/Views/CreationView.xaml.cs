@@ -1,0 +1,188 @@
+using System.Numerics;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using System.Windows.Media.Media3D;
+using EvolutionaryOrganic.App.Rendering;
+using EvolutionaryOrganic.Core.Development;
+using HelixToolkit.Maths;
+using HelixToolkit.SharpDX;
+using HelixToolkit.Wpf.SharpDX;
+using PBRMaterial = HelixToolkit.Wpf.SharpDX.PBRMaterial;
+
+namespace EvolutionaryOrganic.App.Views;
+
+/// <summary>
+/// Renders one creation in a Direct3D 11 viewport with physically based materials,
+/// shadows, ambient occlusion and environment reflections. Drag to rotate, wheel to zoom,
+/// double-click to reset the view.
+/// </summary>
+public partial class CreationView : UserControl
+{
+    public static readonly DependencyProperty MorphologyProperty = DependencyProperty.Register(
+        nameof(Morphology), typeof(Morphology), typeof(CreationView),
+        new PropertyMetadata(null, (d, _) => ((CreationView)d).OnMorphologyChanged()));
+
+    private const double FieldOfView = 36;
+    private const double Azimuth = 35 * Math.PI / 180;
+    private const double Elevation = 18 * Math.PI / 180;
+
+    /// <summary>Normalised sphere centres and radii, kept to frame the camera tightly.</summary>
+    private Vector4[] _framing = [];
+
+    private readonly PBRMaterial _material = new()
+    {
+        AlbedoColor = new Color4(1f, 1f, 1f, 1f),
+        ReflectanceFactor = 0.5,
+        AmbientOcclusionFactor = 1,
+        ClearCoatRoughness = 0.08,
+        RenderEnvironmentMap = true,
+        RenderShadowMap = true,
+    };
+
+    public CreationView()
+    {
+        InitializeComponent();
+        Environment.Texture = StudioEnvironment.CreateTexture();
+        SpheresModel.Material = _material;
+        Camera.FieldOfView = FieldOfView;
+        ResetCamera(animate: false);
+        SizeChanged += (_, e) =>
+        {
+            if (e.PreviousSize.Width == 0 || e.PreviousSize.Height == 0) ResetCamera(animate: false);
+        };
+    }
+
+    public Morphology? Morphology
+    {
+        get => (Morphology?)GetValue(MorphologyProperty);
+        set => SetValue(MorphologyProperty, value);
+    }
+
+    /// <summary>Restores the default three-quarter view, framing the creation snugly.</summary>
+    public void ResetCamera(bool animate = true)
+    {
+        var toCamera = new Vector3D(
+            Math.Cos(Elevation) * Math.Sin(Azimuth),
+            Math.Sin(Elevation),
+            Math.Cos(Elevation) * Math.Cos(Azimuth));
+        double distance = FitDistance(toCamera);
+        var position = (Point3D)(toCamera * distance);
+        var look = -toCamera * distance;
+        if (animate && IsLoaded)
+        {
+            Viewport.SetView(position, look, new Vector3D(0, 1, 0), 300);
+        }
+        else
+        {
+            Camera.Position = position;
+            Camera.LookDirection = look;
+            Camera.UpDirection = new Vector3D(0, 1, 0);
+        }
+        AimLights();
+    }
+
+    /// <summary>Renders the current view, from the current camera angle, at the given resolution.</summary>
+    public BitmapSource RenderImage(int width, int height) =>
+        Viewport.RenderBitmap(width, height) ?? throw new InvalidOperationException("The renderer did not produce an image.");
+
+    private void OnMorphologyChanged()
+    {
+        var morphology = Morphology;
+        if (morphology is null || morphology.Spheres.Count == 0)
+        {
+            SpheresModel.Instances = null;
+            SpheresModel.InstanceParamArray = null;
+            SpheresModel.Geometry = null;
+            return;
+        }
+
+        // Normalise into a unit sphere about the origin so every creation fills its view.
+        float scale = 1f / morphology.BoundingRadius;
+        var center = morphology.Center;
+        var spheres = morphology.Spheres;
+        var matrices = new Matrix4x4[spheres.Count];
+        _framing = new Vector4[spheres.Count];
+        var parameters = new InstanceParameter[spheres.Count];
+        for (int i = 0; i < spheres.Count; i++)
+        {
+            var s = spheres[i];
+            var position = (s.Position - center) * scale;
+            matrices[i] = Matrix4x4.CreateScale(s.Radius * scale) * Matrix4x4.CreateTranslation(position);
+            _framing[i] = new Vector4(position, s.Radius * scale);
+            parameters[i] = new InstanceParameter
+            {
+                DiffuseColor = new Color4(s.Color.X, s.Color.Y, s.Color.Z, 1f),
+                EmissiveColor = new Color4(0f, 0f, 0f, 0f),
+            };
+        }
+
+        var surface = morphology.Surface;
+        _material.RoughnessFactor = surface.Roughness;
+        _material.MetallicFactor = surface.Metallic;
+        _material.ClearCoatStrength = surface.ClearCoat;
+
+        SpheresModel.Geometry = SphereMeshes.ForSphereCount(spheres.Count);
+        SpheresModel.Instances = matrices;
+        SpheresModel.InstanceParamArray = parameters;
+        ResetCamera(animate: false);
+    }
+
+    /// <summary>
+    /// The camera distance, looking at the origin from direction <paramref name="toCamera"/>, at which
+    /// every sphere fits inside the view with a small margin.
+    /// </summary>
+    private double FitDistance(Vector3D toCamera)
+    {
+        const double fallback = 3.4, margin = 1.08;
+        if (_framing.Length == 0) return fallback;
+
+        double aspect = ActualWidth > 0 && ActualHeight > 0 ? ActualWidth / ActualHeight : 4.0 / 3.0;
+        // Helix's FieldOfView is horizontal.
+        double tanH = Math.Tan(FieldOfView * Math.PI / 360);
+        double tanV = tanH / aspect;
+
+        var back = toCamera;
+        back.Normalize();
+        var right = Vector3D.CrossProduct(new Vector3D(0, 1, 0), back);
+        right.Normalize();
+        var up = Vector3D.CrossProduct(back, right);
+
+        double distance = 0;
+        foreach (var f in _framing)
+        {
+            var p = new Vector3D(f.X, f.Y, f.Z);
+            double x = Math.Abs(Vector3D.DotProduct(p, right)) + f.W;
+            double y = Math.Abs(Vector3D.DotProduct(p, up)) + f.W;
+            double z = Vector3D.DotProduct(p, back);
+            distance = Math.Max(distance, z + Math.Max(x / tanH, y / tanV));
+        }
+        return Math.Clamp(distance * margin, 0.5, 20);
+    }
+
+    private void OnCameraChanged(object? sender, RoutedEventArgs e) => AimLights();
+
+    private void OnViewportDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        ResetCamera();
+        e.Handled = true;
+    }
+
+    /// <summary>Keeps the key, fill and rim lights fixed relative to the viewer.</summary>
+    private void AimLights()
+    {
+        var look = Camera.LookDirection;
+        if (look.LengthSquared < 1e-9) return;
+        look.Normalize();
+        var right = Vector3D.CrossProduct(look, Camera.UpDirection);
+        if (right.LengthSquared < 1e-9) right = new Vector3D(1, 0, 0);
+        right.Normalize();
+        var up = Vector3D.CrossProduct(right, look);
+
+        // Each vector points from the subject towards the light; the light travels the opposite way.
+        KeyLight.Direction = -(-0.55 * right + 0.75 * up - 0.45 * look);
+        FillLight.Direction = -(0.9 * right + 0.1 * up - 0.4 * look);
+        RimLight.Direction = -(0.25 * right + 0.55 * up + 0.8 * look);
+    }
+}

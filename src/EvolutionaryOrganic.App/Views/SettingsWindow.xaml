@@ -1,0 +1,46 @@
+<Window x:Class="EvolutionaryOrganic.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Width="460" SizeToContent="Height"
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <StackPanel Margin="20">
+        <TextBlock Text="Appearance" Style="{StaticResource SectionHeader}" />
+        <TextBlock Text="Theme" Style="{StaticResource SecondaryText}" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,18">
+            <RadioButton x:Name="SystemTheme" Content="System default" GroupName="Theme" Margin="0,0,16,0" />
+            <RadioButton x:Name="LightTheme" Content="Light" GroupName="Theme" Margin="0,0,16,0" />
+            <RadioButton x:Name="DarkTheme" Content="Dark" GroupName="Theme" />
+        </StackPanel>
+
+        <TextBlock Text="Evolution" Style="{StaticResource SectionHeader}" />
+        <DockPanel Margin="0,4,0,0">
+            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                       Text="{Binding Value, ElementName=StrengthSlider, StringFormat={}{0:P0}}" />
+            <TextBlock Text="Mutation strength" Width="150" VerticalAlignment="Center" />
+            <Slider x:Name="StrengthSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" />
+        </DockPanel>
+        <DockPanel Margin="0,8,0,0">
+            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                       Text="{Binding Value, ElementName=StructuralSlider, StringFormat={}{0:P0}}" />
+            <TextBlock Text="Structural mutations" Width="150" VerticalAlignment="Center" />
+            <Slider x:Name="StructuralSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" />
+        </DockPanel>
+        <DockPanel Margin="0,8,0,18">
+            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                       Text="{Binding Value, ElementName=MaxSpheresSlider, StringFormat={}{0:N0}}" />
+            <TextBlock Text="Sphere limit" Width="150" VerticalAlignment="Center" />
+            <Slider x:Name="MaxSpheresSlider" Minimum="250" Maximum="10000" SmallChange="250" LargeChange="1000"
+                    TickFrequency="250" IsSnapToTickEnabled="True" />
+        </DockPanel>
+
+        <TextBlock Text="Rendering" Style="{StaticResource SectionHeader}" />
+        <CheckBox x:Name="ShadowsCheck" Content="Shadows" />
+        <CheckBox x:Name="AmbientOcclusionCheck" Content="Ambient occlusion (soft contact shading)" />
+        <CheckBox x:Name="AntialiasingCheck" Content="Anti-aliasing (4× MSAA)" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+            <Button Content="OK" Width="90" IsDefault="True" Style="{DynamicResource AccentButtonStyle}" Click="OnOk" />
+            <Button Content="Cancel" Width="90" Margin="8,0,0,0" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>
