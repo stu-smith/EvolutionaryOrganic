@@ -31,6 +31,12 @@ public sealed class AppSettings
     /// <summary>Upper limit on spheres per creation, which keeps the nine views interactive.</summary>
     public int MaxSpheres { get; set; } = 3000;
 
+    /// <summary>Upper limit on procedural textures per genome.</summary>
+    public int MaxTextures { get; set; } = 3;
+
+    /// <summary>Upper limit on procedural bump maps per genome.</summary>
+    public int MaxBumpMaps { get; set; } = 3;
+
     public bool EnableShadows { get; set; } = true;
 
     public bool EnableAmbientOcclusion { get; set; } = true;

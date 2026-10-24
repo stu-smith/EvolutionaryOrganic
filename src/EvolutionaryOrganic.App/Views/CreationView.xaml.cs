@@ -6,9 +6,11 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using EvolutionaryOrganic.App.Rendering;
 using EvolutionaryOrganic.Core.Development;
+using EvolutionaryOrganic.Core.Genetics;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
+using SharpDX.Direct3D11;
 using PBRMaterial = HelixToolkit.Wpf.SharpDX.PBRMaterial;
 
 namespace EvolutionaryOrganic.App.Views;
@@ -28,24 +30,19 @@ public partial class CreationView : UserControl
     private const double Azimuth = 35 * Math.PI / 180;
     private const double Elevation = 18 * Math.PI / 180;
 
+    /// <summary>
+    /// Roughness is a material constant in the PBR shader, not a per-instance value, so spheres are grouped
+    /// into this many roughness levels, each drawn as its own instanced model. The steps are too fine to notice.
+    /// </summary>
+    private const int RoughnessLevels = 8;
+
     /// <summary>Normalised sphere centres and radii, kept to frame the camera tightly.</summary>
     private Vector4[] _framing = [];
-
-    private readonly PBRMaterial _material = new()
-    {
-        AlbedoColor = new Color4(1f, 1f, 1f, 1f),
-        ReflectanceFactor = 0.5,
-        AmbientOcclusionFactor = 1,
-        ClearCoatRoughness = 0.08,
-        RenderEnvironmentMap = true,
-        RenderShadowMap = true,
-    };
 
     public CreationView()
     {
         InitializeComponent();
         Environment.Texture = StudioEnvironment.CreateTexture();
-        SpheresModel.Material = _material;
         Camera.FieldOfView = FieldOfView;
         ResetCamera(animate: false);
         SizeChanged += (_, e) =>
@@ -89,45 +86,79 @@ public partial class CreationView : UserControl
 
     private void OnMorphologyChanged()
     {
+        SpheresGroup.Children.Clear();
         var morphology = Morphology;
         if (morphology is null || morphology.Spheres.Count == 0)
         {
-            SpheresModel.Instances = null;
-            SpheresModel.InstanceParamArray = null;
-            SpheresModel.Geometry = null;
+            _framing = [];
             return;
         }
+
+        var textures = morphology.Textures.Select(t => t is null ? null : ImageTextures.Create(t)).ToArray();
+        var bumpMaps = morphology.BumpMaps.Select(b => b is null ? null : ImageTextures.Create(b)).ToArray();
 
         // Normalise into a unit sphere about the origin so every creation fills its view.
         float scale = 1f / morphology.BoundingRadius;
         var center = morphology.Center;
         var spheres = morphology.Spheres;
-        var matrices = new Matrix4x4[spheres.Count];
         _framing = new Vector4[spheres.Count];
-        var parameters = new InstanceParameter[spheres.Count];
+        var batches = new Dictionary<MaterialKey, (List<Matrix4x4> Matrices, List<InstanceParameter> Parameters)>();
         for (int i = 0; i < spheres.Count; i++)
         {
             var s = spheres[i];
             var position = (s.Position - center) * scale;
-            matrices[i] = Matrix4x4.CreateScale(s.Radius * scale) * Matrix4x4.CreateTranslation(position);
             _framing[i] = new Vector4(position, s.Radius * scale);
-            parameters[i] = new InstanceParameter
+
+            var key = new MaterialKey((int)MathF.Round(s.Roughness * (RoughnessLevels - 1)), s.Texture, s.BumpMap);
+            if (!batches.TryGetValue(key, out var batch))
+            {
+                batch = ([], []);
+                batches.Add(key, batch);
+            }
+            // The rotation turns the sphere's texture and bumps along with the structure it belongs to.
+            batch.Matrices.Add(Matrix4x4.CreateScale(s.Radius * scale)
+                               * Matrix4x4.CreateFromQuaternion(s.Orientation)
+                               * Matrix4x4.CreateTranslation(position));
+            batch.Parameters.Add(new InstanceParameter
             {
                 DiffuseColor = new Color4(s.Color.X, s.Color.Y, s.Color.Z, 1f),
                 EmissiveColor = new Color4(0f, 0f, 0f, 0f),
-            };
+            });
         }
 
-        var surface = morphology.Surface;
-        _material.RoughnessFactor = surface.Roughness;
-        _material.MetallicFactor = surface.Metallic;
-        _material.ClearCoatStrength = surface.ClearCoat;
-
-        SpheresModel.Geometry = SphereMeshes.ForSphereCount(spheres.Count);
-        SpheresModel.Instances = matrices;
-        SpheresModel.InstanceParamArray = parameters;
+        var geometry = SphereMeshes.ForSphereCount(spheres.Count);
+        foreach (var (key, batch) in batches)
+        {
+            SpheresGroup.Children.Add(new InstancingMeshGeometryModel3D
+            {
+                Geometry = geometry,
+                Instances = batch.Matrices.ToArray(),
+                InstanceParamArray = batch.Parameters.ToArray(),
+                Material = CreateMaterial(morphology.Surface, key, textures, bumpMaps),
+                IsThrowingShadow = true,
+                CullMode = CullMode.Back,
+            });
+        }
         ResetCamera(animate: false);
     }
+
+    private static PBRMaterial CreateMaterial(SurfaceGenes surface, MaterialKey key, TextureModel?[] textures, TextureModel?[] bumpMaps) => new()
+    {
+        // The instance colour (plain colour or tint) multiplies the albedo map.
+        AlbedoColor = new Color4(1f, 1f, 1f, 1f),
+        AlbedoMap = key.Texture >= 0 ? textures[key.Texture] : null,
+        NormalMap = key.BumpMap >= 0 ? bumpMaps[key.BumpMap] : null,
+        RoughnessFactor = Math.Max(0.04, (double)key.RoughnessLevel / (RoughnessLevels - 1)),
+        MetallicFactor = surface.Metallic,
+        ClearCoatStrength = surface.ClearCoat,
+        ReflectanceFactor = 0.5,
+        AmbientOcclusionFactor = 1,
+        ClearCoatRoughness = 0.08,
+        RenderEnvironmentMap = true,
+        RenderShadowMap = true,
+    };
+
+    private readonly record struct MaterialKey(int RoughnessLevel, int Texture, int BumpMap);
 
     /// <summary>
     /// The camera distance, looking at the origin from direction <paramref name="toCamera"/>, at which

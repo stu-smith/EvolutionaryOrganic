@@ -3,8 +3,20 @@ using EvolutionaryOrganic.Core.Genetics;
 
 namespace EvolutionaryOrganic.Core.Development;
 
-/// <summary>One sphere of an expanded creation, in world space. Colour is sRGB in [0, 1].</summary>
-public readonly record struct SphereInstance(Vector3 Position, float Radius, Vector3 Color);
+/// <summary>
+/// One sphere of an expanded creation, in world space. Colour is sRGB in [0, 1]; for a textured sphere it is the
+/// tint multiplied over the texture. <see cref="Orientation"/> turns the sphere's texture and bumps with the
+/// structure it belongs to. <see cref="Texture"/> and <see cref="BumpMap"/> index the morphology's baked images,
+/// or are -1 for none.
+/// </summary>
+public readonly record struct SphereInstance(
+    Vector3 Position,
+    float Radius,
+    Vector3 Color,
+    Quaternion Orientation,
+    float Roughness,
+    int Texture = -1,
+    int BumpMap = -1);
 
 /// <summary>Bounds on how far a genome is expanded, which keeps rendering interactive.</summary>
 public sealed record MorphologyLimits
@@ -17,16 +29,26 @@ public sealed record MorphologyLimits
 
     /// <summary>Spheres (and whole subtrees) smaller than this are not produced.</summary>
     public float MinRadius { get; init; } = 1e-3f;
+
+    /// <summary>Width in pixels of baked textures and bump maps; their height is half this.</summary>
+    public int TextureSize { get; init; } = 512;
 }
 
 /// <summary>The phenotype: the set of spheres a genome grows into.</summary>
 public sealed class Morphology
 {
-    public Morphology(IReadOnlyList<SphereInstance> spheres, bool truncated, SurfaceGenes surface)
+    public Morphology(
+        IReadOnlyList<SphereInstance> spheres,
+        bool truncated,
+        SurfaceGenes surface,
+        IReadOnlyList<BakedImage?>? textures = null,
+        IReadOnlyList<BakedImage?>? bumpMaps = null)
     {
         Spheres = spheres;
         Truncated = truncated;
         Surface = surface;
+        Textures = textures ?? [];
+        BumpMaps = bumpMaps ?? [];
 
         if (spheres.Count == 0)
         {
@@ -54,6 +76,12 @@ public sealed class Morphology
     public bool Truncated { get; }
 
     public SurfaceGenes Surface { get; }
+
+    /// <summary>Baked colour textures, parallel to <see cref="Genome.Textures"/>; null where no sphere uses one.</summary>
+    public IReadOnlyList<BakedImage?> Textures { get; }
+
+    /// <summary>Baked normal maps, parallel to <see cref="Genome.BumpMaps"/>; null where no sphere uses one.</summary>
+    public IReadOnlyList<BakedImage?> BumpMaps { get; }
 
     public Vector3 Center { get; }
 

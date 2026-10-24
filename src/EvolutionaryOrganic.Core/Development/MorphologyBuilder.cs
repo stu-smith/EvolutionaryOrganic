@@ -8,9 +8,18 @@ public static class MorphologyBuilder
 {
     public static Morphology Build(Genome genome, MorphologyLimits? limits = null)
     {
-        var walker = new Walker(limits ?? MorphologyLimits.Default);
+        limits ??= MorphologyLimits.Default;
+        var walker = new Walker(limits, genome.Textures.Count, genome.BumpMaps.Count);
         walker.Visit(genome.Root, Matrix4x4.Identity, 1f, PropertyState.Initial, 0);
-        return new Morphology(walker.Spheres, walker.Truncated, genome.Surface);
+
+        // Only images that some sphere shows are worth the time to bake.
+        var textures = genome.Textures
+            .Select((gene, i) => walker.Spheres.Any(s => s.Texture == i) ? ImageBaker.BakeTexture(gene, limits.TextureSize) : null)
+            .ToList();
+        var bumpMaps = genome.BumpMaps
+            .Select((gene, i) => walker.Spheres.Any(s => s.BumpMap == i) ? ImageBaker.BakeBumpMap(gene, limits.TextureSize) : null)
+            .ToList();
+        return new Morphology(walker.Spheres, walker.Truncated, genome.Surface, textures, bumpMaps);
     }
 
     /// <summary>
@@ -45,7 +54,7 @@ public static class MorphologyBuilder
         }
     }
 
-    private sealed class Walker(MorphologyLimits limits)
+    private sealed class Walker(MorphologyLimits limits, int textureCount, int bumpMapCount)
     {
         public List<SphereInstance> Spheres { get; } = [];
 
@@ -71,7 +80,15 @@ public static class MorphologyBuilder
                     float radius = sphere.Radius * scale * props.Size;
                     if (radius < limits.MinRadius) return;
                     var color = sphere.Color.Shift(props.Hue, props.Saturation, props.Value).ToRgb();
-                    Spheres.Add(new SphereInstance(world.Translation, radius, color));
+                    var orientation = Matrix4x4.Decompose(world, out _, out var rotation, out _) ? rotation : Quaternion.Identity;
+                    Spheres.Add(new SphereInstance(
+                        world.Translation,
+                        radius,
+                        color,
+                        orientation,
+                        Math.Clamp(sphere.Roughness, 0f, 1f),
+                        ValidIndex(sphere.Texture, textureCount),
+                        ValidIndex(sphere.BumpMap, bumpMapCount)));
                     break;
 
                 case GroupNode group:
@@ -89,5 +106,8 @@ public static class MorphologyBuilder
                     break;
             }
         }
+
+        /// <summary>A hand-edited genome may refer to images it lacks; such spheres are drawn plain.</summary>
+        private static int ValidIndex(int? index, int count) => index is int i && i >= 0 && i < count ? i : -1;
     }
 }

@@ -7,8 +7,11 @@ namespace EvolutionaryOrganic.Core.Evolution;
 /// <summary>Creates random genomes and random sub-structures.</summary>
 public static class RandomGenomeFactory
 {
-    /// <summary>Creates a random genome that grows into a reasonable number of spheres.</summary>
-    public static Genome CreateGenome(Random rng, int maxSpheres = 3000)
+    /// <summary>
+    /// Creates a random genome that grows into a reasonable number of spheres, and that may define
+    /// up to <paramref name="maxTextures"/> textures and <paramref name="maxBumpMaps"/> bump maps.
+    /// </summary>
+    public static Genome CreateGenome(Random rng, int maxSpheres = 3000, int maxTextures = 3, int maxBumpMaps = 3)
     {
         for (int attempt = 0; ; attempt++)
         {
@@ -16,14 +19,20 @@ public static class RandomGenomeFactory
             long count = MorphologyBuilder.EstimateSphereCount(root);
             if ((count >= 12 && count <= maxSpheres) || attempt > 50)
             {
-                return new Genome { Root = root, Surface = CreateSurface(rng) };
+                var genome = new Genome { Root = root, Surface = CreateSurface(rng) };
+                if (maxTextures > 0 && rng.Chance(0.5))
+                {
+                    int textures = rng.Next(1, Math.Min(maxTextures, 2) + 1);
+                    for (int i = 0; i < textures; i++) ImageMutator.AddTexture(genome, rng);
+                }
+                if (maxBumpMaps > 0 && rng.Chance(0.4)) ImageMutator.AddBumpMap(genome, rng);
+                return genome;
             }
         }
     }
 
     public static SurfaceGenes CreateSurface(Random rng) => new()
     {
-        Roughness = rng.NextFloat(0.15f, 0.7f),
         Metallic = rng.Chance(0.2) ? rng.NextFloat(0.4f, 1f) : rng.NextFloat(0f, 0.1f),
         ClearCoat = rng.Chance(0.5) ? rng.NextFloat(0.2f, 1f) : 0f,
     };
@@ -46,6 +55,7 @@ public static class RandomGenomeFactory
     {
         Radius = rng.NextFloat(0.25f, 0.6f),
         Color = new HsvColor(rng.NextFloat(0f, 360f), rng.NextFloat(0.35f, 0.9f), rng.NextFloat(0.55f, 1f)),
+        Roughness = rng.Chance(0.25) ? rng.NextFloat(0.04f, 0.2f) : rng.NextFloat(0.15f, 0.85f),
     };
 
     public static LinearRepeatNode CreateLinearRepeat(Random rng, GenomeNode child) => new()

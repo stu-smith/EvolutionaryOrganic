@@ -186,6 +186,24 @@
                                     TickFrequency="250" IsSnapToTickEnabled="True"
                                     Value="{Binding MaxSpheres}" />
                         </DockPanel>
+                        <DockPanel Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding MaxTextures}" />
+                            <TextBlock Text="Texture limit" Width="130" VerticalAlignment="Center" />
+                            <Slider Minimum="0" Maximum="8" SmallChange="1" LargeChange="1"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ToolTip="Most procedural textures a genome may define (0 = plain colours only)"
+                                    Value="{Binding MaxTextures}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding MaxBumpMaps}" />
+                            <TextBlock Text="Bump map limit" Width="130" VerticalAlignment="Center" />
+                            <Slider Minimum="0" Maximum="8" SmallChange="1" LargeChange="1"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ToolTip="Most procedural bump maps a genome may define (0 = smooth spheres only)"
+                                    Value="{Binding MaxBumpMaps}" />
+                        </DockPanel>
                         <TextBlock Text="Changes apply to the next re-roll." Margin="0,8,0,0"
                                    Style="{StaticResource SecondaryText}" />
                     </StackPanel>

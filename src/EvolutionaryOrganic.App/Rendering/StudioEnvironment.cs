@@ -69,7 +69,7 @@ public static class StudioEnvironment
         using var stream = new MemoryStream();
         using var w = new BinaryWriter(stream);
 
-        WriteHeader(w, size, mipCount);
+        DdsWriter.WriteHeader(w, size, size, mipCount, cubeMap: true);
 
         for (int face = 0; face < 6; face++)
         {
@@ -130,39 +130,5 @@ public static class StudioEnvironment
         // Gentle tone-map so the soft boxes keep a little gradient rather than clipping flat.
         float mapped = linear / (1f + 0.15f * linear);
         return (byte)Math.Clamp((int)MathF.Round(mapped * 255f), 0, 255);
-    }
-
-    private static void WriteHeader(BinaryWriter w, int size, int mipCount)
-    {
-        const uint ddsdCaps = 0x1, ddsdHeight = 0x2, ddsdWidth = 0x4, ddsdPitch = 0x8, ddsdPixelFormat = 0x1000, ddsdMipMapCount = 0x20000;
-        const uint ddpfAlphaPixels = 0x1, ddpfRgb = 0x40;
-        const uint capsComplex = 0x8, capsTexture = 0x1000, capsMipMap = 0x400000;
-        const uint caps2CubeMapAllFaces = 0x200 | 0x400 | 0x800 | 0x1000 | 0x2000 | 0x4000 | 0x8000;
-
-        w.Write(0x20534444u); // "DDS "
-        w.Write(124u);
-        w.Write(ddsdCaps | ddsdHeight | ddsdWidth | ddsdPitch | ddsdPixelFormat | ddsdMipMapCount);
-        w.Write((uint)size);
-        w.Write((uint)size);
-        w.Write((uint)(size * 4));
-        w.Write(0u); // depth
-        w.Write((uint)mipCount);
-        for (int i = 0; i < 11; i++) w.Write(0u);
-
-        // Pixel format: 32-bit RGBA (R8G8B8A8_UNORM).
-        w.Write(32u);
-        w.Write(ddpfRgb | ddpfAlphaPixels);
-        w.Write(0u);
-        w.Write(32u);
-        w.Write(0x000000FFu);
-        w.Write(0x0000FF00u);
-        w.Write(0x00FF0000u);
-        w.Write(0xFF000000u);
-
-        w.Write(capsComplex | capsTexture | capsMipMap);
-        w.Write(caps2CubeMapAllFaces);
-        w.Write(0u);
-        w.Write(0u);
-        w.Write(0u);
     }
 }

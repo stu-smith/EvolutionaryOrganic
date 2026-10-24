@@ -21,6 +21,12 @@ public sealed record MutationSettings
 
     /// <summary>Maximum nesting depth of the genome tree.</summary>
     public int MaxTreeDepth { get; init; } = 8;
+
+    /// <summary>Maximum number of procedural textures a genome may define.</summary>
+    public int MaxTextures { get; init; } = 3;
+
+    /// <summary>Maximum number of procedural bump maps a genome may define.</summary>
+    public int MaxBumpMaps { get; init; } = 3;
 }
 
 /// <summary>Produces mutated offspring of a genome.</summary>
@@ -62,9 +68,14 @@ public static class Mutator
     private static void MutateParameters(Genome genome, Random rng, float strength)
     {
         float s = 0.25f + strength * 1.5f;
-        if (rng.Chance(0.1))
+        if (rng.Chance(0.08))
         {
             genome.Surface = MutateSurface(genome.Surface, rng, s);
+            return;
+        }
+        if (rng.Chance(0.15) && ImageMutator.VisibleGenes(genome) is { Count: > 0 } images)
+        {
+            ImageMutator.MutateParameters(rng.Pick(images), rng, s);
             return;
         }
 
@@ -82,8 +93,13 @@ public static class Mutator
         switch (node)
         {
             case SphereNode sphere:
-                if (rng.Chance(0.5)) sphere.Radius = Math.Clamp(sphere.Radius * MathF.Exp(rng.NextGaussian() * 0.25f * s), 0.02f, 3f);
-                else sphere.Color = JiggleColor(sphere.Color, rng, s);
+                switch (rng.PickWeighted(0.35, 0.35, 0.18, genome.Textures.Count + genome.BumpMaps.Count > 0 ? 0.12 : 0))
+                {
+                    case 0: sphere.Radius = Math.Clamp(sphere.Radius * MathF.Exp(rng.NextGaussian() * 0.25f * s), 0.02f, 3f); break;
+                    case 1: sphere.Color = JiggleColor(sphere.Color, rng, s); break;
+                    case 2: sphere.Roughness = Math.Clamp(sphere.Roughness + rng.NextGaussian() * 0.15f * s, 0.04f, 1f); break;
+                    default: ImageMutator.MutateAppearance(sphere, genome, rng); break;
+                }
                 break;
 
             case LinearRepeatNode linear:
@@ -116,7 +132,6 @@ public static class Mutator
 
     private static SurfaceGenes MutateSurface(SurfaceGenes surface, Random rng, float s) => surface with
     {
-        Roughness = Math.Clamp(surface.Roughness + rng.NextGaussian() * 0.12f * s, 0.04f, 1f),
         Metallic = Math.Clamp(surface.Metallic + rng.NextGaussian() * 0.15f * s, 0f, 1f),
         ClearCoat = Math.Clamp(surface.ClearCoat + rng.NextGaussian() * 0.2f * s, 0f, 1f),
     };
@@ -187,8 +202,13 @@ public static class Mutator
         var nodes = genome.Root.DescendantsAndSelf().ToList();
         var node = rng.Pick(nodes);
         bool canDeepen = genome.Root.Depth() < settings.MaxTreeDepth;
+        bool canAddTexture = genome.Textures.Count < settings.MaxTextures;
+        bool canAddBumpMap = genome.BumpMaps.Count < settings.MaxBumpMaps;
+        var images = ImageMutator.VisibleGenes(genome);
 
-        switch (rng.PickWeighted(canDeepen ? 1.0 : 0, 1.0, 1.2, 0.8, 0.8, 0.8, 0.6))
+        switch (rng.PickWeighted(
+                    canDeepen ? 1.0 : 0, 1.0, 1.2, 0.8, 0.8, 0.8, 0.6,
+                    canAddTexture ? 0.5 : 0, canAddBumpMap ? 0.4 : 0, images.Count > 0 ? 0.8 : 0))
         {
             case 0: // Wrap the node in a new repeat.
                 var wrapper = rng.Chance(0.55)
@@ -255,7 +275,19 @@ public static class Mutator
                 }
                 break;
 
-            default: // Turn a linear repeat into a radial one, or vice versa.
+            case 7: // Add a procedural texture.
+                ImageMutator.AddTexture(genome, rng);
+                break;
+
+            case 8: // Add a procedural bump map.
+                ImageMutator.AddBumpMap(genome, rng);
+                break;
+
+            case 9: // Restructure a texture's or bump map's image tree.
+                ImageMutator.MutateStructure(rng.Pick(images), rng);
+                break;
+
+            case 6: // Turn a linear repeat into a radial one, or vice versa.
                 if (nodes.OfType<RepeatNode>().ToList() is { Count: > 0 } swappable)
                 {
                     var old = rng.Pick(swappable);
@@ -272,8 +304,17 @@ public static class Mutator
         }
     }
 
-    /// <summary>Prunes the genome until it fits within the sphere budget and depth limit.</summary>
+    /// <summary>
+    /// Prunes the genome until it fits within the sphere budget, depth limit and image limits.
+    /// Textures and bump maps that no sphere shows any more are dropped.
+    /// </summary>
     private static void EnforceLimits(Genome genome, Random rng, MutationSettings settings)
+    {
+        PruneTree(genome, rng, settings);
+        ImageMutator.Compact(genome, rng, settings.MaxTextures, settings.MaxBumpMaps);
+    }
+
+    private static void PruneTree(Genome genome, Random rng, MutationSettings settings)
     {
         for (int guard = 0; guard < 200; guard++)
         {
@@ -292,7 +333,8 @@ public static class Mutator
 
             var largest = repeats.Where(r => r.Count > 2).OrderByDescending(r => r.Count).FirstOrDefault()
                           ?? rng.Pick(repeats);
-            if (largest.Count > 2) largest.Count = (int)MathF.Ceiling(largest.Count * 0.8f);
+            // Shrink by a fifth, but always by at least one: for small counts the fifth rounds away to nothing.
+            if (largest.Count > 2) largest.Count = Math.Min(largest.Count - 1, (int)MathF.Ceiling(largest.Count * 0.8f));
             else genome.Replace(largest, largest.Child);
         }
     }
