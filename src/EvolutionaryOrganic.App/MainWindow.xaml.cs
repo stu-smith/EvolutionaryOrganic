@@ -119,6 +119,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnFullScreen(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CreationSlotViewModel slot } || slot.Morphology is null) return;
+        new FullScreenWindow(slot) { Owner = this }.ShowDialog();
+    }
+
     private void OnExit(object sender, RoutedEventArgs e) => Close();
 
     private CreationView? FindCurrentCreationView() =>
