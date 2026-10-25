@@ -1,16 +1,19 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EvolutionaryOrganic.App.Services;
 using EvolutionaryOrganic.Core.Development;
 using EvolutionaryOrganic.Core.Evolution;
 using EvolutionaryOrganic.Core.Genetics;
+using EvolutionaryOrganic.Core.Serialization;
 
 namespace EvolutionaryOrganic.App.ViewModels;
 
 /// <summary>
 /// Drives the evolutionary loop: the centre slot holds the current creation, and the
-/// eight surrounding slots hold its mutants. Selecting a mutant makes it current.
+/// eight surrounding slots hold its mutants, or its offspring with a genome kept in the project.
+/// Selecting one makes it current.
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
@@ -25,11 +28,17 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _settings = settings;
         Slots = new ReadOnlyCollection<CreationSlotViewModel>(Enumerable.Range(0, 9)
-            .Select(i => new CreationSlotViewModel(i, i == CenterIndex, SelectCommand, RerollCommand))
+            .Select(i => new CreationSlotViewModel(i, i == CenterIndex, SelectCommand, RerollCommand, KeepCommand))
             .ToList());
+        ProjectGenomes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsProjectEmpty));
     }
 
     public IReadOnlyList<CreationSlotViewModel> Slots { get; }
+
+    /// <summary>The genomes kept in the project, shown down the left of the window.</summary>
+    public ObservableCollection<ProjectGenomeViewModel> ProjectGenomes { get; } = [];
+
+    public bool IsProjectEmpty => ProjectGenomes.Count == 0;
 
     public CreationSlotViewModel CurrentSlot => Slots[CenterIndex];
 
@@ -48,6 +57,22 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BackCommand))]
     private int _historyDepth;
+
+    /// <summary>Where the project was last opened from or saved to, or null if it has never been saved.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProjectName), nameof(WindowTitle))]
+    private string? _projectPath;
+
+    /// <summary>True when genomes have been kept or removed since the project was last opened or saved.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    private bool _isDirty;
+
+    public string ProjectName => ProjectPath is null
+        ? "Untitled"
+        : Path.GetFileName(ProjectPath).Replace(GenomeSerializer.ProjectFileExtension, string.Empty, StringComparison.OrdinalIgnoreCase);
+
+    public string WindowTitle => $"{ProjectName}{(IsDirty ? "*" : string.Empty)} – Evolutionary Organic";
 
     /// <summary>0 = subtle, 1 = wild. Takes effect on the next re-roll.</summary>
     public double MutationStrength
@@ -106,7 +131,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         morphology ??= MorphologyBuilder.Build(genome, Limits());
-        CurrentSlot.SetCreation(genome, morphology);
+        CurrentSlot.SetCreation(genome, morphology, IsKept(genome));
         GenomeTree = GenomeNodeViewModel.ForGenome(genome, morphology);
         Summary = $"Generation {genome.Generation} · {morphology.Spheres.Count:N0} spheres" +
                   (morphology.Truncated ? " (capped by sphere limit)" : string.Empty);
@@ -115,6 +140,126 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private static string Plural(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    // ---------------------------------------------------------------- project
+
+    /// <summary>Starts an empty, untitled project with a fresh random creation.</summary>
+    public void NewProject()
+    {
+        ProjectGenomes.Clear();
+        ClearHistory();
+        ProjectPath = null;
+        IsDirty = false;
+        NewRandom();
+    }
+
+    /// <summary>Replaces the project with <paramref name="project"/>, resuming from its current creation.</summary>
+    public void OpenProject(Project project, string path)
+    {
+        ProjectGenomes.Clear();
+        foreach (var genome in project.Genomes) AddToProject(genome);
+        ClearHistory();
+        ProjectPath = path;
+        IsDirty = false;
+
+        var current = project.Current ?? project.Genomes.FirstOrDefault();
+        if (current is null)
+        {
+            NewRandom();
+            return;
+        }
+        // If the current creation was kept, show it as kept: it was saved as a separate copy of the same genome.
+        string json = GenomeSerializer.Serialize(current);
+        SetCurrent(project.Genomes.FirstOrDefault(g => GenomeSerializer.Serialize(g) == json) ?? current, remember: false);
+    }
+
+    /// <summary>A snapshot of the project for saving.</summary>
+    public Project ToProject() => new()
+    {
+        Genomes = ProjectGenomes.Select(p => p.Genome).ToList(),
+        Current = CurrentGenome,
+    };
+
+    public void MarkSaved(string path)
+    {
+        ProjectPath = path;
+        IsDirty = false;
+    }
+
+    /// <summary>Adds <paramref name="genome"/> to the project list, unless it is already there.</summary>
+    public void AddToProject(Genome genome, Morphology? morphology = null)
+    {
+        if (IsKept(genome)) return;
+
+        var item = new ProjectGenomeViewModel(genome, CombineCommand, SelectKeptCommand, RemoveKeptCommand);
+        ProjectGenomes.Add(item);
+        IsDirty = true;
+        RefreshKept();
+
+        if (morphology is not null)
+        {
+            item.Morphology = morphology;
+            return;
+        }
+
+        var limits = Limits();
+        var ui = TaskScheduler.FromCurrentSynchronizationContext();
+        Task.Run(() => MorphologyBuilder.Build(genome, limits))
+            .ContinueWith(task =>
+            {
+                if (task.IsFaulted) item.Error = task.Exception?.GetBaseException().Message;
+                else item.Morphology = task.Result;
+            }, ui);
+    }
+
+    private bool IsKept(Genome genome) => ProjectGenomes.Any(p => ReferenceEquals(p.Genome, genome));
+
+    private void RefreshKept()
+    {
+        foreach (var slot in Slots) slot.IsKept = slot.Genome is { } genome && IsKept(genome);
+    }
+
+    private void ClearHistory()
+    {
+        _history.Clear();
+        HistoryDepth = 0;
+    }
+
+    /// <summary>Keeps a creation from the grid in the project.</summary>
+    [RelayCommand]
+    private void Keep(CreationSlotViewModel? slot)
+    {
+        if (slot is null || !slot.CanKeep) return;
+        AddToProject(slot.Genome!, slot.Morphology);
+    }
+
+    /// <summary>Makes a kept genome the current creation.</summary>
+    [RelayCommand]
+    private void SelectKept(ProjectGenomeViewModel? item)
+    {
+        if (item is null || ReferenceEquals(item.Genome, CurrentGenome)) return;
+        SetCurrent(item.Genome, morphology: item.Morphology);
+    }
+
+    [RelayCommand]
+    private void RemoveKept(ProjectGenomeViewModel? item)
+    {
+        if (item is null || !ProjectGenomes.Remove(item)) return;
+        IsDirty = true;
+        RefreshKept();
+    }
+
+    /// <summary>Fills the eight outer slots with offspring of the current creation crossed with a kept genome.</summary>
+    [RelayCommand]
+    private void Combine(ProjectGenomeViewModel? item)
+    {
+        if (item is null || CurrentGenome is null) return;
+        var mate = item.Genome;
+        var mutation = CreateMutationSettings();
+        Breed((parent, rng) => Crossover.Cross(parent, mate, rng, mutation), isOffspring: true);
+    }
+
+    // ---------------------------------------------------------------- evolution
 
     [RelayCommand]
     private void NewRandom()
@@ -141,23 +286,21 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool CanGoBack() => HistoryDepth > 0;
 
-    /// <summary>Discards the eight mutants and breeds a fresh set from the current creation.</summary>
+    /// <summary>Discards the eight outer creations and breeds a fresh set of mutants from the current creation.</summary>
     [RelayCommand]
     private void Reroll()
+    {
+        var mutation = CreateMutationSettings();
+        Breed((parent, rng) => Mutator.Mutate(parent, rng, mutation), isOffspring: false);
+    }
+
+    /// <summary>Fills the eight outer slots with children of the current creation made by <paramref name="breed"/>.</summary>
+    private void Breed(Func<Genome, Random, Genome> breed, bool isOffspring)
     {
         var parent = CurrentGenome;
         if (parent is null) return;
 
         int batch = ++_batch;
-        var settings = _settings();
-        var mutation = new MutationSettings
-        {
-            Strength = (float)settings.MutationStrength,
-            StructuralProbability = (float)settings.StructuralMutationRate,
-            MaxSpheres = settings.MaxSpheres,
-            MaxTextures = settings.MaxTextures,
-            MaxBumpMaps = settings.MaxBumpMaps,
-        };
         var limits = Limits();
         var ui = TaskScheduler.FromCurrentSynchronizationContext();
 
@@ -165,9 +308,10 @@ public sealed partial class MainViewModel : ObservableObject
         {
             int seed = _rng.Next();
             slot.IsBusy = true;
+            slot.IsOffspring = isOffspring;
             Task.Run(() =>
                 {
-                    var genome = Mutator.Mutate(parent, new Random(seed), mutation);
+                    var genome = breed(parent, new Random(seed));
                     return (Genome: genome, Morphology: MorphologyBuilder.Build(genome, limits));
                 })
                 .ContinueWith(task =>
@@ -179,9 +323,22 @@ public sealed partial class MainViewModel : ObservableObject
                         slot.IsBusy = false;
                         return;
                     }
-                    slot.SetCreation(task.Result.Genome, task.Result.Morphology);
+                    slot.SetCreation(task.Result.Genome, task.Result.Morphology, isKept: false);
                 }, ui);
         }
+    }
+
+    private MutationSettings CreateMutationSettings()
+    {
+        var settings = _settings();
+        return new MutationSettings
+        {
+            Strength = (float)settings.MutationStrength,
+            StructuralProbability = (float)settings.StructuralMutationRate,
+            MaxSpheres = settings.MaxSpheres,
+            MaxTextures = settings.MaxTextures,
+            MaxBumpMaps = settings.MaxBumpMaps,
+        };
     }
 
     private MorphologyLimits Limits() => new() { MaxSpheres = _settings().MaxSpheres };

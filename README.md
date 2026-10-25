@@ -4,7 +4,12 @@ Breed 3D organic forms through aesthetic selection, in the spirit of William Lat
 
 The window shows a 3×3 grid. The **current** creation sits in the centre and is surrounded by eight **mutants** of it.
 Click **Select** under a mutant to make it current and breed a new generation around it, or click **Re-roll** to discard
-the mutants and breed eight fresh ones. The sidebar shows the current creation's genome tree.
+the mutants and breed eight fresh ones. The sidebar on the right shows the current creation's genome tree.
+
+Work is organised into **projects**. Click **Keep** on any of the nine creations to add its genome to the project,
+which is listed down the left of the window. Each kept genome has a **Combine** button, which crosses it with the
+current creation (sexual reproduction) and fills the eight outer slots with offspring, and a **Select** button, which
+makes it the current creation.
 
 ## Building
 
@@ -26,10 +31,13 @@ The solution can also be opened in Visual Studio 2022 17.14+ / Visual Studio 202
 | Zoom | Mouse wheel, or right-drag |
 | Pan | Middle-drag, or Shift + left-drag |
 | Reset a view | Double-click it |
-| New random creation | File → New (Ctrl+N) |
+| New / open / save project | File → New project (Ctrl+Shift+N) / Open project (Ctrl+O) / Save project (Ctrl+S), Save as (Ctrl+Shift+S): `.organic.json` |
+| Keep a creation in the project | Keep button on any of the nine creations |
+| Cross a kept genome with the current creation | Combine button in the project list |
+| New random creation | File → New random creation (Ctrl+N) |
 | Undo a selection | Evolution → Back (Ctrl+Z) |
 | Re-roll mutants | Re-roll button, or F5 |
-| Import / export genome | File → Import (Ctrl+O) / Export (Ctrl+S): human-readable `.genome.json` |
+| Import / export a single genome | File → Import genome into project (Ctrl+I) / Export current genome (Ctrl+E): human-readable `.genome.json` |
 | Export a high-res image | File → Export image (Ctrl+P): PNG / JPEG / TIFF, up to 16384 px per side, from the current angle |
 | Mutation strength, sphere / texture / bump map limits | Evolution pane, bottom right |
 | Theme, quality | Tools → Settings |
@@ -74,6 +82,15 @@ limits in the Evolution pane.
 structural mutations (wrap a node in a repeat, unwrap, add or remove group parts, swap repeat kinds, duplicate
 subtrees, add textures and bump maps, restructure image trees). It then prunes each mutant back within the sphere,
 depth, texture and bump map limits.
+
+`Evolution/Crossover` breeds offspring of two genomes. A copy of one parent (either, at random) has a random subtree
+replaced by a copy of a random subtree of the other, bringing along the textures and bump maps the transplanted spheres
+show; metalness and clear coat are each inherited from either parent, and sometimes a texture or bump map is swapped
+for one of the other parent's. Offspring are pruned to the same limits as mutants, and are always different from both
+parents.
+
+A project file (`.organic.json`) holds the kept genomes and the current creation, each in the same format as a
+`.genome.json` file.
 
 Genome files from before textures (format version 1) still load: their whole-creation roughness is copied onto every
 sphere.

@@ -11,6 +11,8 @@ public static class GenomeSerializer
 {
     public const string FileExtension = ".genome.json";
 
+    public const string ProjectFileExtension = ".organic.json";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -25,7 +27,9 @@ public static class GenomeSerializer
     /// <summary>Serializes any part of a genome on one line, for use as a content key.</summary>
     public static string SerializeCompact(object value, Type type) => JsonSerializer.Serialize(value, type, CompactOptions);
 
-    public static Genome Deserialize(string json)
+    public static Genome Deserialize(string json) => Deserialize(JsonNode.Parse(json));
+
+    private static Genome Deserialize(JsonNode? json)
     {
         var genome = JsonSerializer.Deserialize<Genome>(json, Options)
                      ?? throw new InvalidDataException("The file does not contain a genome.");
@@ -42,9 +46,9 @@ public static class GenomeSerializer
     }
 
     /// <summary>Version 1 had a single roughness for the whole creation; it now belongs to each sphere.</summary>
-    private static void MigrateFromVersion1(Genome genome, string json)
+    private static void MigrateFromVersion1(Genome genome, JsonNode? json)
     {
-        if (JsonNode.Parse(json)?["surface"]?["roughness"] is JsonValue value && value.TryGetValue(out float roughness))
+        if (json?["surface"]?["roughness"] is JsonValue value && value.TryGetValue(out float roughness))
         {
             foreach (var sphere in genome.Root.DescendantsAndSelf().OfType<SphereNode>()) sphere.Roughness = roughness;
         }
@@ -54,6 +58,32 @@ public static class GenomeSerializer
     public static void Save(Genome genome, string path) => File.WriteAllText(path, Serialize(genome));
 
     public static Genome Load(string path) => Deserialize(File.ReadAllText(path));
+
+    public static string SerializeProject(Project project) => JsonSerializer.Serialize(project, Options);
+
+    /// <summary>Reads a project, migrating each of its genomes from older formats as <see cref="Deserialize(string)"/> does.</summary>
+    public static Project DeserializeProject(string json)
+    {
+        if (JsonNode.Parse(json) is not JsonObject root || root["genomes"] is not JsonArray genomes)
+        {
+            throw new InvalidDataException("The file does not contain a project.");
+        }
+        int version = root["formatVersion"]?.GetValue<int>() ?? Project.CurrentFormatVersion;
+        if (version > Project.CurrentFormatVersion)
+        {
+            throw new InvalidDataException(
+                $"This project uses format version {version}, but only versions up to {Project.CurrentFormatVersion} are supported.");
+        }
+        return new Project
+        {
+            Genomes = genomes.Select(g => Deserialize(g)).ToList(),
+            Current = root["current"] is { } current ? Deserialize(current) : null,
+        };
+    }
+
+    public static void SaveProject(Project project, string path) => File.WriteAllText(path, SerializeProject(project));
+
+    public static Project LoadProject(string path) => DeserializeProject(File.ReadAllText(path));
 
     /// <summary>Writes vectors compactly as <c>[x, y, z]</c>.</summary>
     private sealed class Vector3Converter : JsonConverter<Vector3>
