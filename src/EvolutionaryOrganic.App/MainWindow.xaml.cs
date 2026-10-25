@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -14,6 +15,14 @@ public partial class MainWindow : Window
 {
     private const string GenomeFilter = "Genome files (*.genome.json)|*.genome.json|JSON files (*.json)|*.json|All files (*.*)|*.*";
 
+    private const string ProjectFilter = "Projects (*.organic.json)|*.organic.json|JSON files (*.json)|*.json|All files (*.*)|*.*";
+
+    public static readonly RoutedCommand NewProjectCommand = new();
+
+    public static readonly RoutedCommand ImportGenomeCommand = new();
+
+    public static readonly RoutedCommand ExportGenomeCommand = new();
+
     private readonly MainViewModel _viewModel;
 
     public MainWindow()
@@ -24,14 +33,91 @@ public partial class MainWindow : Window
         Loaded += (_, _) => _viewModel.Start();
     }
 
-    private void OnImportGenome(object sender, ExecutedRoutedEventArgs e)
+    protected override void OnClosing(CancelEventArgs e)
     {
-        var dialog = new OpenFileDialog { Title = "Import genome", Filter = GenomeFilter };
+        if (!ConfirmDiscardChanges()) e.Cancel = true;
+        base.OnClosing(e);
+    }
+
+    private void OnNewProject(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (ConfirmDiscardChanges()) _viewModel.NewProject();
+    }
+
+    private void OnOpenProject(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (!ConfirmDiscardChanges()) return;
+
+        var dialog = new OpenFileDialog { Title = "Open project", Filter = ProjectFilter };
         if (dialog.ShowDialog(this) != true) return;
 
         try
         {
-            _viewModel.SetCurrent(GenomeSerializer.Load(dialog.FileName));
+            _viewModel.OpenProject(GenomeSerializer.LoadProject(dialog.FileName), dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not open the project.\n\n{ex.Message}", "Open project", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void OnSaveProject(object sender, ExecutedRoutedEventArgs e) => SaveProject(_viewModel.ProjectPath);
+
+    private void OnSaveProjectAs(object sender, ExecutedRoutedEventArgs e) => SaveProject(null);
+
+    /// <summary>Saves the project to <paramref name="path"/>, or asks where to save it. Returns false if it was not saved.</summary>
+    private bool SaveProject(string? path)
+    {
+        if (path is null)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save project",
+                Filter = ProjectFilter,
+                FileName = $"{_viewModel.ProjectName}{GenomeSerializer.ProjectFileExtension}",
+            };
+            if (dialog.ShowDialog(this) != true) return false;
+            path = dialog.FileName;
+        }
+
+        try
+        {
+            GenomeSerializer.SaveProject(_viewModel.ToProject(), path);
+            _viewModel.MarkSaved(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not save the project.\n\n{ex.Message}", "Save project", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+    }
+
+    /// <summary>Offers to save unsaved changes to the project. Returns false if the user cancelled.</summary>
+    private bool ConfirmDiscardChanges()
+    {
+        if (!_viewModel.IsDirty) return true;
+
+        var answer = MessageBox.Show(this, $"Save changes to {_viewModel.ProjectName}?", "Evolutionary Organic",
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return answer switch
+        {
+            MessageBoxResult.Yes => SaveProject(_viewModel.ProjectPath),
+            MessageBoxResult.No => true,
+            _ => false,
+        };
+    }
+
+    private void OnImportGenome(object sender, ExecutedRoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Title = "Import genome into project", Filter = GenomeFilter, Multiselect = true };
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            var genomes = dialog.FileNames.Select(GenomeSerializer.Load).ToList();
+            foreach (var genome in genomes) _viewModel.AddToProject(genome);
+            _viewModel.SetCurrent(genomes[^1]);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
@@ -46,7 +132,7 @@ public partial class MainWindow : Window
 
         var dialog = new SaveFileDialog
         {
-            Title = "Export genome",
+            Title = "Export current genome",
             Filter = GenomeFilter,
             FileName = $"creation-gen{genome.Generation}{GenomeSerializer.FileExtension}",
         };

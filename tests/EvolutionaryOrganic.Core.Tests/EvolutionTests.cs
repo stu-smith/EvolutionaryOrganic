@@ -66,6 +66,63 @@ public class EvolutionTests
         Assert.NotEmpty(MorphologyBuilder.Build(genome, new MorphologyLimits { TextureSize = 32 }).Spheres);
     }
 
+    [Fact]
+    public void OffspringDifferFromBothParents()
+    {
+        var rng = new Random(21);
+        var first = RandomGenomeFactory.CreateGenome(rng);
+        var second = RandomGenomeFactory.CreateGenome(rng);
+        string firstJson = GenomeSerializer.Serialize(first);
+        string secondJson = GenomeSerializer.Serialize(second);
+        for (int i = 0; i < 50; i++)
+        {
+            var child = Crossover.Cross(first, second, rng);
+            string json = GenomeSerializer.Serialize(child);
+            Assert.NotEqual(firstJson, json);
+            Assert.NotEqual(secondJson, json);
+            Assert.Equal(Math.Max(first.Generation, second.Generation) + 1, child.Generation);
+        }
+        Assert.Equal(firstJson, GenomeSerializer.Serialize(first));
+        Assert.Equal(secondJson, GenomeSerializer.Serialize(second));
+    }
+
+    [Fact]
+    public void CrossingAGenomeWithItselfStillVaries()
+    {
+        var genome = RandomGenomeFactory.CreateGenome(new Random(4));
+        var child = Crossover.Cross(genome, genome.DeepClone(), new Random(9));
+        Assert.NotEqual(GenomeSerializer.Serialize(genome), GenomeSerializer.Serialize(child));
+    }
+
+    [Fact]
+    public void CrossingIsDeterministicForASeed()
+    {
+        var rng = new Random(6);
+        var first = RandomGenomeFactory.CreateGenome(rng);
+        var second = RandomGenomeFactory.CreateGenome(rng);
+        var a = Crossover.Cross(first, second, new Random(42));
+        var b = Crossover.Cross(first, second, new Random(42));
+        Assert.Equal(GenomeSerializer.Serialize(a), GenomeSerializer.Serialize(b));
+    }
+
+    [Fact]
+    public void OffspringStayWithinLimits()
+    {
+        var settings = new MutationSettings { MaxSpheres = 1500, MaxTreeDepth = 7, MaxTextures = 2, MaxBumpMaps = 1 };
+        var rng = new Random(77);
+        for (int i = 0; i < 100; i++)
+        {
+            var first = RandomGenomeFactory.CreateGenome(rng, settings.MaxSpheres, settings.MaxTextures, settings.MaxBumpMaps);
+            var second = RandomGenomeFactory.CreateGenome(rng, settings.MaxSpheres, settings.MaxTextures, settings.MaxBumpMaps);
+            for (int j = 0; j < 5; j++) first = Mutator.Mutate(first, rng, settings with { StructuralProbability = 0.5f });
+            var child = Crossover.Cross(first, second, rng, settings);
+            Assert.InRange(MorphologyBuilder.EstimateSphereCount(child.Root), 1, settings.MaxSpheres);
+            Assert.InRange(child.Root.Depth(), 1, settings.MaxTreeDepth);
+            AssertTreeIsSound(child.Root);
+            AssertImagesAreSound(child, settings);
+        }
+    }
+
     private static void AssertImagesAreSound(Genome genome, MutationSettings settings)
     {
         Assert.InRange(genome.Textures.Count, 0, settings.MaxTextures);

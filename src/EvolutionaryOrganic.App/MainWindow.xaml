@@ -3,17 +3,26 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EvolutionaryOrganic.App.ViewModels"
         xmlns:v="clr-namespace:EvolutionaryOrganic.App.Views"
-        Title="Evolutionary Organic"
+        xmlns:local="clr-namespace:EvolutionaryOrganic.App"
+        Title="{Binding WindowTitle}"
         Width="1500" Height="960" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
     <Window.InputBindings>
         <KeyBinding Key="N" Modifiers="Control" Command="{Binding NewRandomCommand}" />
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding BackCommand}" />
         <KeyBinding Key="F5" Command="{Binding RerollCommand}" />
+        <KeyBinding Key="N" Modifiers="Control+Shift" Command="{x:Static local:MainWindow.NewProjectCommand}" />
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="SaveAs" />
+        <KeyBinding Key="I" Modifiers="Control" Command="{x:Static local:MainWindow.ImportGenomeCommand}" />
+        <KeyBinding Key="E" Modifiers="Control" Command="{x:Static local:MainWindow.ExportGenomeCommand}" />
     </Window.InputBindings>
     <Window.CommandBindings>
-        <CommandBinding Command="Open" Executed="OnImportGenome" />
-        <CommandBinding Command="Save" Executed="OnExportGenome" />
+        <CommandBinding Command="{x:Static local:MainWindow.NewProjectCommand}" Executed="OnNewProject" />
+        <CommandBinding Command="Open" Executed="OnOpenProject" />
+        <CommandBinding Command="Save" Executed="OnSaveProject" />
+        <CommandBinding Command="SaveAs" Executed="OnSaveProjectAs" />
+        <CommandBinding Command="{x:Static local:MainWindow.ImportGenomeCommand}" Executed="OnImportGenome" />
+        <CommandBinding Command="{x:Static local:MainWindow.ExportGenomeCommand}" Executed="OnExportGenome" />
         <CommandBinding Command="Print" Executed="OnExportImage" />
     </Window.CommandBindings>
 
@@ -41,18 +50,40 @@
                         <TextBlock Text="&#xE740;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" />
                     </Button>
 
-                    <Button Content="Select" Margin="0,0,0,10" Padding="18,4"
-                            HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                            ToolTip="Make this mutant the current creation"
-                            Command="{Binding SelectCommand}" CommandParameter="{Binding}"
-                            IsEnabled="{Binding CanSelect}"
-                            Visibility="{Binding IsMutant, Converter={StaticResource BoolToVisibility}}" />
-                    <Button Content="Re-roll" Margin="0,0,0,10" Padding="18,4"
-                            HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                            Style="{DynamicResource AccentButtonStyle}"
-                            ToolTip="Breed a fresh set of eight mutants (F5)"
-                            Command="{Binding RerollCommand}"
-                            Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibility}}" />
+                    <StackPanel Margin="0,0,0,10" Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                        <Button Content="Select" Padding="18,4"
+                                ToolTip="Make this creation the current one"
+                                Command="{Binding SelectCommand}" CommandParameter="{Binding}"
+                                IsEnabled="{Binding CanSelect}"
+                                Visibility="{Binding IsMutant, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Re-roll" Padding="18,4"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                ToolTip="Breed a fresh set of eight mutants (F5)"
+                                Command="{Binding RerollCommand}"
+                                Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Margin="6,0,0,0" Padding="12,4"
+                                ToolTip="{Binding KeepToolTip}" ToolTipService.ShowOnDisabled="True"
+                                Command="{Binding KeepCommand}" CommandParameter="{Binding}"
+                                IsEnabled="{Binding CanKeep}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Keep" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsKept}" Value="True">
+                                                    <Setter Property="Text" Value="Kept" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
             <DataTemplate.Triggers>
@@ -61,6 +92,40 @@
                     <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
                 </DataTrigger>
             </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ProjectGenomeTemplate" DataType="{x:Type vm:ProjectGenomeViewModel}">
+            <Border Margin="0,0,0,8" Height="190" BorderThickness="1" CornerRadius="6"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                <Grid>
+                    <v:CreationView Morphology="{Binding Morphology}" />
+
+                    <StackPanel Margin="8,6" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Details}" Style="{StaticResource SecondaryText}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Error}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="10" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+
+                    <Button Margin="6" Padding="5" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            ToolTip="Remove from the project"
+                            Command="{Binding RemoveCommand}" CommandParameter="{Binding}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" />
+                    </Button>
+
+                    <StackPanel Margin="0,0,0,8" Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                        <Button Content="Combine" Padding="12,4"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                ToolTip="Cross with the current creation to breed eight offspring"
+                                Command="{Binding CombineCommand}" CommandParameter="{Binding}" />
+                        <Button Content="Select" Margin="6,0,0,0" Padding="12,4"
+                                ToolTip="Make this the current creation"
+                                Command="{Binding SelectCommand}" CommandParameter="{Binding}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </DataTemplate>
 
         <HierarchicalDataTemplate DataType="{x:Type vm:GenomeNodeViewModel}" ItemsSource="{Binding Children}">
@@ -101,10 +166,14 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_New random creation" InputGestureText="Ctrl+N" Command="{Binding NewRandomCommand}" />
+                <MenuItem Header="New _project" InputGestureText="Ctrl+Shift+N" Command="{x:Static local:MainWindow.NewProjectCommand}" />
+                <MenuItem Header="_Open project…" InputGestureText="Ctrl+O" Command="Open" />
+                <MenuItem Header="_Save project" InputGestureText="Ctrl+S" Command="Save" />
+                <MenuItem Header="Save project _as…" InputGestureText="Ctrl+Shift+S" Command="SaveAs" />
                 <Separator />
-                <MenuItem Header="_Import genome…" InputGestureText="Ctrl+O" Command="Open" />
-                <MenuItem Header="_Export genome…" InputGestureText="Ctrl+S" Command="Save" />
+                <MenuItem Header="_New random creation" InputGestureText="Ctrl+N" Command="{Binding NewRandomCommand}" />
+                <MenuItem Header="_Import genome into project…" InputGestureText="Ctrl+I" Command="{x:Static local:MainWindow.ImportGenomeCommand}" />
+                <MenuItem Header="_Export current genome…" InputGestureText="Ctrl+E" Command="{x:Static local:MainWindow.ExportGenomeCommand}" />
                 <MenuItem Header="Export _image…" InputGestureText="Ctrl+P" Command="Print" />
                 <Separator />
                 <MenuItem Header="E_xit" Click="OnExit" />
@@ -120,12 +189,37 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" MinWidth="160" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="500" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="360" MinWidth="220" />
             </Grid.ColumnDefinitions>
 
-            <ItemsControl ItemsSource="{Binding Slots}" ItemTemplate="{StaticResource SlotTemplate}" Margin="6" Focusable="False">
+            <Border Margin="10,10,0,10" Padding="10" CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="4,0,4,10">
+                        <TextBlock Text="Project" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ProjectName}" Style="{StaticResource SecondaryText}" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <Grid>
+                        <TextBlock Margin="4,0" Style="{StaticResource SecondaryText}"
+                                   Text="Click Keep on any creation to add it to the project. Combine crosses a kept genome with the current creation."
+                                   Visibility="{Binding IsProjectEmpty, Converter={StaticResource BoolToVisibility}}" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ProjectGenomes}" ItemTemplate="{StaticResource ProjectGenomeTemplate}"
+                                          Focusable="False" />
+                        </ScrollViewer>
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="Transparent"
+                          ResizeBehavior="PreviousAndNext" />
+
+            <ItemsControl Grid.Column="2" ItemsSource="{Binding Slots}" ItemTemplate="{StaticResource SlotTemplate}" Margin="6" Focusable="False">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Rows="3" Columns="3" />
@@ -133,10 +227,10 @@
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="Transparent"
+            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="Transparent"
                           ResizeBehavior="PreviousAndNext" />
 
-            <Grid Grid.Column="2" Margin="0,10,10,10">
+            <Grid Grid.Column="4" Margin="0,10,10,10">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />

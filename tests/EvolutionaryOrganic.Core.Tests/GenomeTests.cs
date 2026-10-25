@@ -173,6 +173,39 @@ public class GenomeTests
     }
 
     [Fact]
+    public void ProjectSerializationRoundTrips()
+    {
+        var rng = new Random(8);
+        var project = new Project
+        {
+            Genomes = [RandomGenomeFactory.CreateGenome(rng), RandomGenomeFactory.CreateGenome(rng)],
+            Current = RandomGenomeFactory.CreateGenome(rng),
+        };
+        string json = GenomeSerializer.SerializeProject(project);
+        var back = GenomeSerializer.DeserializeProject(json);
+        Assert.Equal(2, back.Genomes.Count);
+        Assert.NotNull(back.Current);
+        Assert.Equal(json, GenomeSerializer.SerializeProject(back));
+    }
+
+    [Fact]
+    public void ProjectWithoutCurrentRoundTrips()
+    {
+        var back = GenomeSerializer.DeserializeProject(GenomeSerializer.SerializeProject(new Project()));
+        Assert.Empty(back.Genomes);
+        Assert.Null(back.Current);
+    }
+
+    [Fact]
+    public void RejectsFilesThatAreNotProjects()
+    {
+        string genomeJson = GenomeSerializer.Serialize(new Genome());
+        Assert.Throws<InvalidDataException>(() => GenomeSerializer.DeserializeProject(genomeJson));
+        string newer = GenomeSerializer.SerializeProject(new Project { FormatVersion = 99 });
+        Assert.Throws<InvalidDataException>(() => GenomeSerializer.DeserializeProject(newer));
+    }
+
+    [Fact]
     public void ReplaceWorksForRootAndNestedNodes()
     {
         var leaf = new SphereNode();

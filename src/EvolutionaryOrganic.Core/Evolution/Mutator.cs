@@ -308,7 +308,7 @@ public static class Mutator
     /// Prunes the genome until it fits within the sphere budget, depth limit and image limits.
     /// Textures and bump maps that no sphere shows any more are dropped.
     /// </summary>
-    private static void EnforceLimits(Genome genome, Random rng, MutationSettings settings)
+    internal static void EnforceLimits(Genome genome, Random rng, MutationSettings settings)
     {
         PruneTree(genome, rng, settings);
         ImageMutator.Compact(genome, rng, settings.MaxTextures, settings.MaxBumpMaps);
