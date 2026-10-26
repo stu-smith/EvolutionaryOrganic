@@ -192,7 +192,7 @@ public partial class CreationView : UserControl
 
     private static PBRMaterial CreateMaterial(SurfaceGenes surface, MaterialKey key, TextureModel?[] textures, TextureModel?[] bumpMaps) => new()
     {
-        // The instance colour (plain colour or tint) multiplies the albedo map.
+        // The instance colour multiplies the albedo map; it is white for textured spheres, so textures show untinted.
         AlbedoColor = new Color4(1f, 1f, 1f, 1f),
         AlbedoMap = key.Texture >= 0 ? textures[key.Texture] : null,
         NormalMap = key.BumpMap >= 0 ? bumpMaps[key.BumpMap] : null,

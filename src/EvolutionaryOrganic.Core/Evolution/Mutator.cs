@@ -58,8 +58,9 @@ public static class Mutator
         fallback.Generation = parent.Generation + 1;
         foreach (var sphere in fallback.Root.DescendantsAndSelf().OfType<SphereNode>())
         {
-            sphere.Color = sphere.Color.Shift(30f, 1f, 1f);
+            if (sphere.Color is HsvColor color) sphere.Color = color.Shift(30f, 1f, 1f);
         }
+        foreach (var texture in fallback.Textures) ImageMutator.ShiftHue(texture, 30f);
         return fallback;
     }
 
@@ -73,7 +74,7 @@ public static class Mutator
             genome.Surface = MutateSurface(genome.Surface, rng, s);
             return;
         }
-        if (rng.Chance(0.15) && ImageMutator.VisibleGenes(genome) is { Count: > 0 } images)
+        if (rng.Chance(0.2) && ImageMutator.VisibleGenes(genome) is { Count: > 0 } images)
         {
             ImageMutator.MutateParameters(rng.Pick(images), rng, s);
             return;
@@ -104,7 +105,11 @@ public static class Mutator
                 switch (rng.PickWeighted(0.35, 0.35, 0.18, genome.Textures.Count + genome.BumpMaps.Count > 0 ? 0.12 : 0))
                 {
                     case 0: sphere.Radius = Math.Clamp(sphere.Radius * MathF.Exp(rng.NextGaussian() * 0.25f * s), 0.02f, 3f); break;
-                    case 1: sphere.Color = JiggleColor(sphere.Color, rng, s); break;
+                    case 1:
+                        // A textured sphere has no colour of its own; its texture's colours change instead.
+                        if (sphere.Color is HsvColor color) sphere.Color = JiggleColor(color, rng, s);
+                        else if (sphere.Texture is int t && t < genome.Textures.Count) ImageMutator.MutateParameters(genome.Textures[t], rng, s);
+                        break;
                     case 2: sphere.Roughness = Math.Clamp(sphere.Roughness + rng.NextGaussian() * 0.15f * s, 0.04f, 1f); break;
                     default: ImageMutator.MutateAppearance(sphere, genome, rng); break;
                 }
@@ -229,7 +234,7 @@ public static class Mutator
 
         switch (rng.PickWeighted(
                     canDeepen ? 1.0 : 0, 1.0, 1.2, 0.8, 0.8, 0.8, 0.6,
-                    canAddTexture ? 0.5 : 0, canAddBumpMap ? 0.4 : 0, images.Count > 0 ? 0.8 : 0))
+                    canAddTexture ? 0.5 : 0, canAddBumpMap ? 0.4 : 0, images.Count > 0 ? 1.8 : 0))
         {
             case 0: // Wrap the node in a new repeat.
                 var wrapper = rng.Chance(0.55)

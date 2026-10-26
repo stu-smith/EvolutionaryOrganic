@@ -47,7 +47,7 @@ The solution can also be opened in Visual Studio 2022 17.14+ / Visual Studio 202
 A genome (`src/EvolutionaryOrganic.Core/Genetics`) is a tree rather than a linear string:
 
 - **Sphere**: the leaf and the visual building block. It has a radius, a roughness (shiny to matte), and either a
-  plain HSV colour or a reference to one of the genome's textures plus a tint. It can also refer to a bump map.
+  plain HSV colour or a reference to one of the genome's colour textures, never both. It can also refer to a bump map.
 - **Group**: combines several sub-structures.
 - **Linear repeat**: repeats its child *n* times, applying a step transform (move, rotate, uniform scale)
   cumulatively. This gives rows, arcs, spirals and tapering horns.
@@ -76,19 +76,24 @@ mesh, so detail finer than the mesh is lost; spheres that do not fuse are drawn 
 ### Textures and bump maps
 
 A genome defines zero or more **textures** and **bump maps** (`Genetics/Imaging`), each a tree of image operations
-that spheres refer to by index. Every image node is a greyscale field over 3D space, sampled on the surface of the
+that spheres refer to by index. Every image node is a colour field over 3D space, sampled on the surface of the
 unit sphere, so patterns have no seams and no pinching at the poles:
 
 - **Patterns** (leaves): fractal noise (smooth, turbulent or ridged), cells (spots or edges), and bands or spirals.
+  In a texture, each pattern maps its values onto its own gradient of two to four colours, around a hue shared by
+  the texture's other patterns (occasionally a contrasting one).
 - **Filters**: warp (domain distortion), transform (zoom and rotate), and tone curves (contrast, invert, posterize,
-  ridge, contours).
-- **Combiners**: blend (mix, add, multiply, difference, lighten, darken) and mask (choose between two images by a third).
+  ridge, contours), which act on each colour channel.
+- **Combiners**: blend (mix, add, multiply, difference, lighten, darken), per channel, and mask (choose between two
+  images by the brightness of a third).
 
-A texture maps its pattern onto a gradient of two to four colours; a bump map treats its pattern as a height field
-with an evolvable depth. `Development/ImageBaker` bakes them into images (cached by content, since mutants usually
+New textures and bump maps start with two or three levels of operations, up to 20 nodes. A textured sphere shows its
+texture exactly as baked: colour modifiers do not tint it. A bump map's patterns have no colours; it treats its image
+as a greyscale height field with an evolvable depth. `Development/ImageBaker` bakes them into images (cached by content, since mutants usually
 inherit their parent's images), and each sphere's texture and bumps turn with the structure it belongs to.
-Mutations tweak image parameters, restructure image trees, add textures and bump maps, and switch spheres between a
-plain colour and a texture. Textures and bump maps that no sphere shows are dropped, and the totals are capped by the
+Mutations tweak image parameters and pattern colours, restructure image trees, add textures and bump maps, and
+switch spheres between a plain colour and a texture (a sphere that drops its texture takes on the texture's overall
+colour). Textures and bump maps that no sphere shows are dropped, and the totals are capped by the
 limits in the Evolution pane.
 
 `Development/MorphologyBuilder` grows a genome into a list of world-space spheres, within a sphere budget.
@@ -107,7 +112,8 @@ A project file (`.organic.json`) holds the kept genomes and the current creation
 `.genome.json` file.
 
 Genome files from before textures (format version 1) still load: their whole-creation roughness is copied onto every
-sphere.
+sphere. In files from before colour textures (format version 3 and earlier), each texture's palette is copied onto
+every pattern in it and the tint is dropped, so such textures look somewhat different.
 
 ## Rendering
 
@@ -116,7 +122,7 @@ Rendering uses [HelixToolkit.Wpf.SharpDX](https://github.com/helix-toolkit/helix
 - **Physically based materials** (`PBRMaterial`) with clear coat, and reflections from a procedurally
   generated studio environment cube map (`Rendering/StudioEnvironment.cs`).
 - **GPU instancing**: spheres are batched by material (roughness level, texture, bump map), with one draw call per
-  batch and per-instance transforms and colours (the colour tints the texture).
+  batch and per-instance transforms and colours (white for textured spheres, so textures are not tinted).
 - Baked textures and normal maps are uploaded with full mip chains (`Rendering/ImageTextures.cs`).
 - Shadow mapping, screen-space ambient occlusion and 4× MSAA, each switchable in Settings.
 - A three-light studio rig that follows the camera, so creations stay well lit from any angle.

@@ -25,7 +25,7 @@ public sealed class GenomeNodeViewModel
 
     public string Glyph { get; }
 
-    /// <summary>The sphere's colour or texture, or an image's thumbnail; null for other nodes.</summary>
+    /// <summary>The sphere's colour or texture, an image's thumbnail, or a pattern's palette; null for other nodes.</summary>
     public Brush? Swatch { get; }
 
     public IReadOnlyList<GeneProperty> Properties { get; }
@@ -60,7 +60,7 @@ public sealed class GenomeNodeViewModel
         {
             swatch = sphere.Texture is int t && t >= 0 && t < textures.Count && textures[t] is { } texture
                 ? texture
-                : ColorBrush(sphere.Color);
+                : ColorBrush(sphere.Color ?? SphereNode.DefaultColor);
         }
 
         return new GenomeNodeViewModel(
@@ -76,6 +76,12 @@ public sealed class GenomeNodeViewModel
 
     private static GenomeNodeViewModel FromImage(ImageNode node)
     {
+        // A coloured pattern shows its palette instead of a glyph.
+        if (node is PatternImageNode { Palette.Count: > 0 } pattern)
+        {
+            return new GenomeNodeViewModel(node.DisplayName, string.Empty, PaletteBrush(pattern.Palette), node.DescribeProperties(), []);
+        }
+
         string glyph = node switch
         {
             NoiseImageNode => "≈",
@@ -120,10 +126,25 @@ public sealed class GenomeNodeViewModel
 
     private static SolidColorBrush ColorBrush(HsvColor color)
     {
-        var rgb = color.ToRgb();
-        var brush = new SolidColorBrush(Color.FromRgb(ToByte(rgb.X), ToByte(rgb.Y), ToByte(rgb.Z)));
+        var brush = new SolidColorBrush(ToColor(color));
         brush.Freeze();
         return brush;
+    }
+
+    /// <summary>The palette as a gradient from dark (left) to light (right), as the pattern maps it.</summary>
+    private static Brush PaletteBrush(IReadOnlyList<HsvColor> palette)
+    {
+        if (palette.Count == 1) return ColorBrush(palette[0]);
+        var stops = new GradientStopCollection(palette.Select((c, i) => new GradientStop(ToColor(c), (double)i / (palette.Count - 1))));
+        var brush = new LinearGradientBrush(stops, 0.0);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Color ToColor(HsvColor color)
+    {
+        var rgb = color.ToRgb();
+        return Color.FromRgb(ToByte(rgb.X), ToByte(rgb.Y), ToByte(rgb.Z));
     }
 
     private static byte ToByte(float value) => (byte)Math.Clamp((int)MathF.Round(value * 255f), 0, 255);

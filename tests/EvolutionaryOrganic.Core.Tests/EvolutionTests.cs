@@ -130,6 +130,7 @@ public class EvolutionTests
         var spheres = genome.Root.DescendantsAndSelf().OfType<SphereNode>().ToList();
         Assert.All(spheres, s => Assert.True(s.Texture is null || s.Texture < genome.Textures.Count, "Dangling texture reference."));
         Assert.All(spheres, s => Assert.True(s.BumpMap is null || s.BumpMap < genome.BumpMaps.Count, "Dangling bump map reference."));
+        Assert.All(spheres, s => Assert.True(s.Texture is null != s.Color is null, "A sphere must have a colour or a texture, not both."));
         for (int i = 0; i < genome.Textures.Count; i++) Assert.Contains(spheres, s => s.Texture == i);
         for (int i = 0; i < genome.BumpMaps.Count; i++) Assert.Contains(spheres, s => s.BumpMap == i);
         foreach (var gene in genome.Textures.Concat<ImageGene>(genome.BumpMaps))

@@ -443,7 +443,7 @@ public static class FusedSurfaceBuilder
             : Vector3.UnitY;
 
         var color = s.Color;
-        if (s.Texture >= 0 && s.Texture < textures.Count && textures[s.Texture] is { } texture) color *= Sample(texture, local);
+        if (s.Texture >= 0 && s.Texture < textures.Count && textures[s.Texture] is { } texture) color = Sample(texture, local);
         float height = 0f;
         if (s.BumpMap >= 0 && s.BumpMap < bumpMaps.Count)
         {

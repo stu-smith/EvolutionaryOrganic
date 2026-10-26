@@ -38,9 +38,12 @@
                         <TextBlock Text="{Binding Details}" Style="{StaticResource SecondaryText}" />
                     </StackPanel>
 
-                    <TextBlock Text="Growing…" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Style="{StaticResource SecondaryText}" IsHitTestVisible="False"
-                               Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+                        <v:Spinner />
+                        <TextBlock Text="Growing…" Margin="0,8,0,0" HorizontalAlignment="Center"
+                                   Style="{StaticResource SecondaryText}" />
+                    </StackPanel>
                     <TextBlock Text="{Binding Error}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                Margin="12" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
 

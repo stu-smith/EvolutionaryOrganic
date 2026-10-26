@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using EvolutionaryOrganic.Core.Genetics;
+using EvolutionaryOrganic.Core.Genetics.Imaging;
 
 namespace EvolutionaryOrganic.Core.Serialization;
 
@@ -39,12 +40,34 @@ public static class GenomeSerializer
                 $"This genome uses format version {genome.FormatVersion}, but only versions up to {Genome.CurrentFormatVersion} are supported.");
         }
         if (genome.Root is null) throw new InvalidDataException("The genome has no root node.");
-        if (genome.FormatVersion < 2) MigrateFromVersion1(genome, json);
-        // Version 3 only added genes whose absence means "off", so nothing else needs migrating.
-        genome.FormatVersion = Genome.CurrentFormatVersion;
         genome.Textures ??= [];
         genome.BumpMaps ??= [];
+        if (genome.FormatVersion < 2) MigrateFromVersion1(genome, json);
+        // Version 3 only added genes whose absence means "off", so nothing needs migrating for it.
+        if (genome.FormatVersion < 4) MigrateFromVersion3(genome, json);
+        genome.FormatVersion = Genome.CurrentFormatVersion;
+
+        // A textured sphere omits its colour, which would otherwise read back as the default.
+        foreach (var sphere in genome.Root.DescendantsAndSelf().OfType<SphereNode>())
+        {
+            if (sphere.Texture is not null) sphere.Color = null;
+            else sphere.Color ??= SphereNode.DefaultColor;
+        }
         return genome;
+    }
+
+    /// <summary>
+    /// Version 3 mapped each texture's greyscale pattern through one palette, then tinted it with the sphere's colour.
+    /// Now each pattern leaf has its own palette, so the texture's palette is copied onto every leaf; the tint is dropped.
+    /// </summary>
+    private static void MigrateFromVersion3(Genome genome, JsonNode? json)
+    {
+        if (json?["textures"] is not JsonArray textures) return;
+        for (int i = 0; i < textures.Count && i < genome.Textures.Count; i++)
+        {
+            if (textures[i]?["palette"]?.Deserialize<List<HsvColor>>(Options) is not { Count: > 0 } palette) continue;
+            foreach (var leaf in genome.Textures[i].Pattern.DescendantsAndSelf().OfType<PatternImageNode>()) leaf.Palette = [.. palette];
+        }
     }
 
     /// <summary>Version 1 had a single roughness for the whole creation; it now belongs to each sphere.</summary>

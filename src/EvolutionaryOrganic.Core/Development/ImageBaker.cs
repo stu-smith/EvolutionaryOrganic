@@ -24,11 +24,23 @@ public static class ImageBaker
 
     /// <summary>Bakes a colour texture, <paramref name="width"/> × <paramref name="width"/>/2 pixels.</summary>
     public static BakedImage BakeTexture(TextureGene gene, int width) =>
-        Cached(gene, width, () => Bake(width, (p, _, _) =>
+        Cached(gene, width, () => Bake(width, (p, _, _) => new Vector4(EvaluateColor(gene.Pattern, p), 1f)));
+
+    /// <summary>The texture's mean colour over the whole sphere, from a sparse but even sample.</summary>
+    public static Vector3 AverageColor(TextureGene gene)
+    {
+        const int samples = 64;
+        var sum = Vector3.Zero;
+        for (int i = 0; i < samples; i++)
         {
-            var rgb = SamplePalette(gene.Palette, Evaluate(gene.Pattern, p));
-            return new Vector4(rgb, 1f);
-        }));
+            // A Fibonacci lattice spreads the samples evenly over the sphere.
+            float y = 1f - (i + 0.5f) * 2f / samples;
+            float r = MathF.Sqrt(1f - y * y);
+            float phi = i * 2.39996323f;
+            sum += EvaluateColor(gene.Pattern, new Vector3(r * MathF.Cos(phi), y, r * MathF.Sin(phi)));
+        }
+        return sum / samples;
+    }
 
     /// <summary>
     /// Bakes a bump gene into a tangent-space normal map, <paramref name="width"/> × <paramref name="width"/>/2
@@ -54,8 +66,64 @@ public static class ImageBaker
         }));
     }
 
-    /// <summary>Evaluates an image tree at a point; the result is nominally in [0, 1].</summary>
-    public static float Evaluate(ImageNode node, Vector3 p)
+    /// <summary>Evaluates an image tree in greyscale at a point; the result is nominally in [0, 1].</summary>
+    public static float Evaluate(ImageNode node, Vector3 p) => Evaluate(node, p, color: false).X;
+
+    /// <summary>Evaluates an image tree in colour at a point; each channel is nominally in [0, 1].</summary>
+    public static Vector3 EvaluateColor(ImageNode node, Vector3 p) => Evaluate(node, p, color: true);
+
+    /// <summary>
+    /// In colour, each leaf maps its pattern through its palette, filters act on each channel, and a mask follows the
+    /// luminance of its mask image. In greyscale, leaves ignore their palettes, so every channel is the same.
+    /// </summary>
+    private static Vector3 Evaluate(ImageNode node, Vector3 p, bool color)
+    {
+        switch (node)
+        {
+            case PatternImageNode pattern:
+            {
+                float v = EvaluatePattern(pattern, p);
+                return color && pattern.Palette is { } palette ? SamplePalette(palette, v) : new Vector3(v);
+            }
+
+            case WarpImageNode warp:
+                return Evaluate(warp.Input, p + ProceduralNoise.Field(p * warp.Frequency, warp.Seed) * warp.Amount, color);
+
+            case TransformImageNode transform:
+            {
+                const float toRadians = MathF.PI / 180f;
+                var rotation = Matrix4x4.CreateFromYawPitchRoll(
+                    transform.Rotation.Y * toRadians, transform.Rotation.X * toRadians, transform.Rotation.Z * toRadians);
+                return Evaluate(transform.Input, Vector3.Transform(p, rotation) * transform.Scale, color);
+            }
+
+            case ToneImageNode tone:
+            {
+                var v = Evaluate(tone.Input, p, color);
+                return new Vector3(Tone(tone, v.X), Tone(tone, v.Y), Tone(tone, v.Z));
+            }
+
+            case BlendImageNode blend:
+            {
+                Vector3 a = Evaluate(blend.A, p, color), b = Evaluate(blend.B, p, color);
+                var blended = new Vector3(Blend(blend.Mode, a.X, b.X), Blend(blend.Mode, a.Y, b.Y), Blend(blend.Mode, a.Z, b.Z));
+                return a + (blended - a) * Saturate(blend.Weight);
+            }
+
+            case MaskImageNode mask:
+            {
+                var maskValue = Evaluate(mask.Mask, p, color);
+                float m = Saturate(0.5f + ((color ? Luminance(maskValue) : maskValue.X) - 0.5f) * MathF.Max(mask.Sharpness, 0f));
+                m = m * m * (3f - 2f * m);
+                return Vector3.Lerp(Evaluate(mask.A, p, color), Evaluate(mask.B, p, color), m);
+            }
+
+            default:
+                return new Vector3(0.5f);
+        }
+    }
+
+    private static float EvaluatePattern(PatternImageNode node, Vector3 p)
     {
         switch (node)
         {
@@ -92,56 +160,32 @@ public static class ImageBaker
                 return 0.5f + 0.5f * MathF.Sin(angle);
             }
 
-            case WarpImageNode warp:
-                return Evaluate(warp.Input, p + ProceduralNoise.Field(p * warp.Frequency, warp.Seed) * warp.Amount);
-
-            case TransformImageNode transform:
-            {
-                const float toRadians = MathF.PI / 180f;
-                var rotation = Matrix4x4.CreateFromYawPitchRoll(
-                    transform.Rotation.Y * toRadians, transform.Rotation.X * toRadians, transform.Rotation.Z * toRadians);
-                return Evaluate(transform.Input, Vector3.Transform(p, rotation) * transform.Scale);
-            }
-
-            case ToneImageNode tone:
-            {
-                float v = Evaluate(tone.Input, p);
-                return tone.Function switch
-                {
-                    ToneFunction.Contrast => Saturate(0.5f + (v - 0.5f) * MathF.Max(tone.Amount, 0f)),
-                    ToneFunction.Invert => 1f - v,
-                    ToneFunction.Posterize => MathF.Min(MathF.Floor(Saturate(v) * tone.ToneLevels), tone.ToneLevels - 1) / (tone.ToneLevels - 1),
-                    ToneFunction.Ridge => 1f - MathF.Abs(2f * v - 1f),
-                    _ => Fraction(v * MathF.Max(tone.Amount, 1f)),
-                };
-            }
-
-            case BlendImageNode blend:
-            {
-                float a = Evaluate(blend.A, p), b = Evaluate(blend.B, p);
-                float blended = blend.Mode switch
-                {
-                    BlendMode.Add => Saturate(a + b),
-                    BlendMode.Multiply => a * b,
-                    BlendMode.Difference => MathF.Abs(a - b),
-                    BlendMode.Lighten => MathF.Max(a, b),
-                    BlendMode.Darken => MathF.Min(a, b),
-                    _ => b,
-                };
-                return a + (blended - a) * Saturate(blend.Weight);
-            }
-
-            case MaskImageNode mask:
-            {
-                float m = Saturate(0.5f + (Evaluate(mask.Mask, p) - 0.5f) * MathF.Max(mask.Sharpness, 0f));
-                m = m * m * (3f - 2f * m);
-                return Evaluate(mask.A, p) * (1f - m) + Evaluate(mask.B, p) * m;
-            }
-
             default:
                 return 0.5f;
         }
     }
+
+    private static float Tone(ToneImageNode tone, float v) => tone.Function switch
+    {
+        ToneFunction.Contrast => Saturate(0.5f + (v - 0.5f) * MathF.Max(tone.Amount, 0f)),
+        ToneFunction.Invert => 1f - v,
+        ToneFunction.Posterize => MathF.Min(MathF.Floor(Saturate(v) * tone.ToneLevels), tone.ToneLevels - 1) / (tone.ToneLevels - 1),
+        ToneFunction.Ridge => 1f - MathF.Abs(2f * v - 1f),
+        _ => Fraction(v * MathF.Max(tone.Amount, 1f)),
+    };
+
+    private static float Blend(BlendMode mode, float a, float b) => mode switch
+    {
+        BlendMode.Add => Saturate(a + b),
+        BlendMode.Multiply => a * b,
+        BlendMode.Difference => MathF.Abs(a - b),
+        BlendMode.Lighten => MathF.Max(a, b),
+        BlendMode.Darken => MathF.Min(a, b),
+        _ => b,
+    };
+
+    /// <summary>Rec. 709 luma weights, so a mask's light and dark match what the eye sees.</summary>
+    private static float Luminance(Vector3 rgb) => Vector3.Dot(rgb, new Vector3(0.2126f, 0.7152f, 0.0722f));
 
     /// <summary>Maps a value in [0, 1] onto colours spaced evenly from the first stop to the last.</summary>
     public static Vector3 SamplePalette(IReadOnlyList<HsvColor> palette, float t)

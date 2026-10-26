@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 namespace EvolutionaryOrganic.Core.Genetics.Imaging;
 
 /// <summary>
-/// A node in a procedural image tree. Every node defines a greyscale field over 3D space, nominally in [0, 1];
-/// textures sample it on the surface of the unit sphere, so the result has no seams and no pinching at the poles.
-/// Leaves generate patterns, and inner nodes reshape, distort or combine the images of their inputs.
+/// A node in a procedural image tree. Every node defines a colour field over 3D space, each channel nominally in
+/// [0, 1]; textures sample it on the surface of the unit sphere, so the result has no seams and no pinching at the
+/// poles. Leaves generate patterns and colour them, and inner nodes reshape, distort or combine the images of their
+/// inputs. Bump maps use the same trees in greyscale: their leaves have no palette.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(NoiseImageNode), "noise")]
@@ -55,14 +56,38 @@ public abstract class ImageNode
 /// <summary>Base for leaf nodes, which generate a pattern from nothing.</summary>
 public abstract class PatternImageNode : ImageNode
 {
+    public const int MaxStops = 4;
+
     /// <summary>Feature density: roughly how many features span the sphere's diameter.</summary>
     public float Frequency { get; set; } = 4f;
 
     /// <summary>Selects a different but statistically identical pattern.</summary>
     public int Seed { get; set; }
 
+    /// <summary>
+    /// Colours spaced evenly along a gradient, from the pattern's darkest value to its lightest; null in bump maps,
+    /// which are greyscale.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<HsvColor>? Palette { get; set; }
+
     [JsonIgnore]
     public override IReadOnlyList<ImageNode> Inputs => [];
+
+    /// <summary>The pattern's own genes, followed by its palette.</summary>
+    public sealed override IEnumerable<GeneProperty> DescribeProperties()
+    {
+        foreach (var p in DescribePattern()) yield return p;
+        foreach (var color in Palette ?? []) yield return new("Colour", color.ToString());
+    }
+
+    protected abstract IEnumerable<GeneProperty> DescribePattern();
+
+    protected T CopyPaletteTo<T>(T clone) where T : PatternImageNode
+    {
+        clone.Palette = Palette is null ? null : [.. Palette];
+        return clone;
+    }
 }
 
 /// <summary>Base for nodes with a single input.</summary>

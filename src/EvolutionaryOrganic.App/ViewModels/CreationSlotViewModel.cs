@@ -67,6 +67,17 @@ public sealed partial class CreationSlotViewModel : ObservableObject
         : $"{Morphology.Spheres.Count:N0} spheres{(Morphology.Truncated ? " (capped)" : string.Empty)}"
           + (Morphology.FusedSpheres.Count > 0 ? $", {Morphology.FusedSpheres.Count:N0} fused" : string.Empty);
 
+    /// <summary>Blanks the slot while a new creation is bred and grown for it.</summary>
+    public void BeginGrowing(bool isOffspring)
+    {
+        Genome = null;
+        Morphology = null;
+        IsKept = false;
+        Error = null;
+        IsOffspring = isOffspring;
+        IsBusy = true;
+    }
+
     public void SetCreation(Genome genome, Morphology morphology, bool isKept)
     {
         Genome = genome;

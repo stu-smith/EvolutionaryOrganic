@@ -1,4 +1,5 @@
 using System.Numerics;
+using EvolutionaryOrganic.Core.Development;
 using EvolutionaryOrganic.Core.Genetics;
 using EvolutionaryOrganic.Core.Genetics.Imaging;
 
@@ -29,12 +30,8 @@ internal static class ImageMutator
     {
         switch (gene)
         {
-            case TextureGene texture when rng.Chance(0.3):
-                int stop = rng.Next(texture.Palette.Count);
-                texture.Palette[stop] = new HsvColor(
-                    texture.Palette[stop].Hue + rng.NextGaussian() * 35f * s,
-                    texture.Palette[stop].Saturation + rng.NextGaussian() * 0.12f * s,
-                    texture.Palette[stop].Value + rng.NextGaussian() * 0.12f * s).Normalized();
+            case TextureGene texture when rng.Chance(0.35) && ColoredLeaves(texture) is { Count: > 0 } leaves:
+                MutatePalette(rng.Pick(leaves).Palette!, rng, s);
                 return;
 
             case BumpGene bump when rng.Chance(0.3):
@@ -109,6 +106,56 @@ internal static class ImageMutator
         }
     }
 
+    private static void MutatePalette(List<HsvColor> palette, Random rng, float s)
+    {
+        if (rng.Chance(0.1))
+        {
+            // Add or drop a stop, keeping at least two.
+            if (palette.Count < PatternImageNode.MaxStops && (palette.Count <= 2 || rng.Chance(0.5)))
+            {
+                int at = rng.Next(1, palette.Count);
+                var a = palette[at - 1];
+                var b = palette[at];
+                palette.Insert(at, new HsvColor(
+                    a.Hue + rng.NextGaussian() * 60f, (a.Saturation + b.Saturation) * 0.5f, (a.Value + b.Value) * 0.5f).Normalized());
+            }
+            else if (palette.Count > 2)
+            {
+                palette.RemoveAt(rng.Next(palette.Count));
+            }
+            return;
+        }
+
+        int stop = rng.Next(palette.Count);
+        palette[stop] = new HsvColor(
+            palette[stop].Hue + rng.NextGaussian() * 35f * s,
+            palette[stop].Saturation + rng.NextGaussian() * 0.12f * s,
+            palette[stop].Value + rng.NextGaussian() * 0.12f * s).Normalized();
+    }
+
+    private static List<PatternImageNode> ColoredLeaves(ImageGene gene) =>
+        gene.Pattern.DescendantsAndSelf().OfType<PatternImageNode>().Where(p => p.Palette is { Count: > 0 }).ToList();
+
+    /// <summary>
+    /// The hue to colour a texture's new leaves around: near one of its existing leaves, so they fit in.
+    /// Null for bump maps, whose leaves are greyscale.
+    /// </summary>
+    private static float? ThemeHue(ImageGene gene, Random rng)
+    {
+        if (gene is not TextureGene) return null;
+        var leaves = ColoredLeaves(gene);
+        return leaves.Count > 0 ? rng.Pick(rng.Pick(leaves).Palette!).Hue : rng.NextFloat(0f, 360f);
+    }
+
+    /// <summary>Turns the hue of every colour in a texture.</summary>
+    public static void ShiftHue(TextureGene gene, float degrees)
+    {
+        foreach (var leaf in ColoredLeaves(gene))
+        {
+            for (int i = 0; i < leaf.Palette!.Count; i++) leaf.Palette[i] = leaf.Palette[i].Shift(degrees, 1f, 1f);
+        }
+    }
+
     private static float JiggleFrequency(float frequency, Random rng, float s) =>
         Math.Clamp(frequency * MathF.Exp(rng.NextGaussian() * 0.25f * s), 0.5f, 24f);
 
@@ -121,6 +168,7 @@ internal static class ImageMutator
     {
         var nodes = gene.Pattern.DescendantsAndSelf().ToList();
         var node = rng.Pick(nodes);
+        float? hue = ThemeHue(gene, rng);
         bool canGrow = nodes.Count < ImageGene.MaxNodes - 2 && gene.Pattern.Depth() < ImageGene.MaxDepth;
 
         switch (rng.PickWeighted(canGrow ? 1.0 : 0, canGrow ? 0.8 : 0, 0.7, 0.6))
@@ -136,10 +184,10 @@ internal static class ImageMutator
                 break;
 
             case 1: // Combine the node with a new pattern.
-                var other = RandomImageFactory.CreatePattern(rng);
+                var other = RandomImageFactory.CreatePattern(rng, hue);
                 ImageNode combined = rng.Chance(0.65)
                     ? RandomImageFactory.CreateBlend(rng, node, other)
-                    : RandomImageFactory.CreateMask(rng, node, other, RandomImageFactory.CreatePattern(rng));
+                    : RandomImageFactory.CreateMask(rng, node, other, RandomImageFactory.CreatePattern(rng, hue));
                 gene.Replace(node, combined);
                 break;
 
@@ -152,7 +200,7 @@ internal static class ImageMutator
                 break;
 
             default: // Replace a small subtree with something new.
-                if (node.Depth() <= 2) gene.Replace(node, RandomImageFactory.CreateImage(rng, rng.Next(0, 2)));
+                if (node.Depth() <= 2) gene.Replace(node, RandomImageFactory.CreateImage(rng, rng.Next(0, 3), hue));
                 break;
         }
     }
@@ -179,9 +227,7 @@ internal static class ImageMutator
     {
         if (PickSphere(genome, rng, s => s.Texture is null) is not { } sphere) return;
         genome.Textures.Add(RandomImageFactory.CreateTexture(rng));
-        sphere.Texture = genome.Textures.Count - 1;
-        // Under a dark or saturated tint the texture would be barely visible, so start from a pale one.
-        sphere.Color = sphere.Color with { Saturation = sphere.Color.Saturation * 0.4f, Value = MathF.Max(sphere.Color.Value, 0.85f) };
+        sphere.ShowTexture(genome.Textures.Count - 1);
     }
 
     /// <summary>Adds a new random bump map and shows it on one of the spheres.</summary>
@@ -197,9 +243,9 @@ internal static class ImageMutator
     {
         if (rng.Chance(0.5) && genome.Textures.Count > 0)
         {
-            sphere.Texture = sphere.Texture is null || (rng.Chance(0.4) && genome.Textures.Count > 1)
-                ? rng.Next(genome.Textures.Count)
-                : null;
+            if (sphere.Texture is null || (rng.Chance(0.4) && genome.Textures.Count > 1)) sphere.ShowTexture(rng.Next(genome.Textures.Count));
+            // The texture's overall colour, so the sphere does not change colour completely.
+            else sphere.ShowColor(FallbackColor(sphere.Texture, genome.Textures));
         }
         else if (genome.BumpMaps.Count > 0)
         {
@@ -211,12 +257,19 @@ internal static class ImageMutator
 
     /// <summary>
     /// Drops textures and bump maps that no sphere shows, then any beyond the limits, renumbering the
-    /// spheres' references to match. Spheres that lose their image fall back to a plain colour or smooth surface.
+    /// spheres' references to match. Spheres that lose their image fall back to a plain colour (the texture's
+    /// overall colour) or smooth surface.
     /// </summary>
     public static void Compact(Genome genome, Random rng, int maxTextures, int maxBumpMaps)
     {
         var spheres = genome.Root.DescendantsAndSelf().OfType<SphereNode>().ToList();
+        var oldTextures = genome.Textures.ToList();
+        var oldIndices = spheres.Select(s => s.Texture).ToList();
         CompactList(genome.Textures, spheres, s => s.Texture, (s, i) => s.Texture = i, Math.Max(0, maxTextures));
+        for (int i = 0; i < spheres.Count; i++)
+        {
+            if (spheres[i].Texture is null && spheres[i].Color is null) spheres[i].Color = FallbackColor(oldIndices[i], oldTextures);
+        }
         CompactList(genome.BumpMaps, spheres, s => s.BumpMap, (s, i) => s.BumpMap = i, Math.Max(0, maxBumpMaps));
         foreach (var gene in genome.Textures.Concat<ImageGene>(genome.BumpMaps)) Prune(gene, rng);
     }
@@ -238,6 +291,11 @@ internal static class ImageMutator
         genes.Clear();
         genes.AddRange(kept);
     }
+
+    private static HsvColor FallbackColor(int? texture, List<TextureGene> textures) =>
+        texture is int t && t >= 0 && t < textures.Count
+            ? HsvColor.FromRgb(ImageBaker.AverageColor(textures[t]))
+            : SphereNode.DefaultColor;
 
     private static SphereNode? PickSphere(Genome genome, Random rng, Func<SphereNode, bool> preferred)
     {

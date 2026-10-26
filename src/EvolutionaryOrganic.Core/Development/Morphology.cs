@@ -4,8 +4,8 @@ using EvolutionaryOrganic.Core.Genetics;
 namespace EvolutionaryOrganic.Core.Development;
 
 /// <summary>
-/// One sphere of an expanded creation, in world space. Colour is sRGB in [0, 1]; for a textured sphere it is the
-/// tint multiplied over the texture. <see cref="Orientation"/> turns the sphere's texture and bumps with the
+/// One sphere of an expanded creation, in world space. Colour is sRGB in [0, 1]; for a textured sphere it is white,
+/// so that multiplying it over the texture leaves the texture unchanged. <see cref="Orientation"/> turns the sphere's texture and bumps with the
 /// structure it belongs to. <see cref="Texture"/> and <see cref="BumpMap"/> index the morphology's baked images,
 /// or are -1 for none. <see cref="Fusion"/> is how far the sphere flows into its neighbours, as a fraction of its radius.
 /// </summary>

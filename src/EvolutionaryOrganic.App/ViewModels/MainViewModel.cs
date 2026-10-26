@@ -307,8 +307,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var slot in Slots.Where(s => !s.IsCurrent))
         {
             int seed = _rng.Next();
-            slot.IsBusy = true;
-            slot.IsOffspring = isOffspring;
+            slot.BeginGrowing(isOffspring);
             Task.Run(() =>
                 {
                     var genome = breed(parent, new Random(seed));

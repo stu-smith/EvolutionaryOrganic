@@ -89,7 +89,11 @@ public static class MorphologyBuilder
                 case SphereNode sphere:
                     float radius = sphere.Radius * scale * props.Size;
                     if (radius < limits.MinRadius) return;
-                    var color = sphere.Color.Shift(props.Hue, props.Saturation, props.Value).ToRgb();
+                    int texture = ValidIndex(sphere.Texture, textureCount);
+                    // A texture shows its own colours, untouched by colour modifiers; white leaves it untinted.
+                    var color = texture >= 0
+                        ? Vector3.One
+                        : (sphere.Color ?? SphereNode.DefaultColor).Shift(props.Hue, props.Saturation, props.Value).ToRgb();
                     var orientation = Matrix4x4.Decompose(world, out _, out var rotation, out _) ? rotation : Quaternion.Identity;
                     Spheres.Add(new SphereInstance(
                         world.Translation,
@@ -97,7 +101,7 @@ public static class MorphologyBuilder
                         color,
                         orientation,
                         Math.Clamp(sphere.Roughness, 0f, 1f),
-                        ValidIndex(sphere.Texture, textureCount),
+                        texture,
                         ValidIndex(sphere.BumpMap, bumpMapCount),
                         props.EffectiveFusion));
                     break;
@@ -118,7 +122,7 @@ public static class MorphologyBuilder
             }
         }
 
-        /// <summary>A hand-edited genome may refer to images it lacks; such spheres are drawn plain.</summary>
+        /// <summary>A hand-edited genome may refer to images it lacks; such spheres are drawn plain (in the default colour if they have none).</summary>
         private static int ValidIndex(int? index, int count) => index is int i && i >= 0 && i < count ? i : -1;
     }
 }

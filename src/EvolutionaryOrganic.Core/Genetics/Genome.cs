@@ -26,8 +26,9 @@ public sealed class Genome
     /// <summary>
     /// Version 2 moved roughness from <see cref="SurfaceGenes"/> to each sphere, and added textures and bump maps.
     /// Version 3 added fusion; older genomes have none, so they read unchanged.
+    /// Version 4 moved each texture's palette onto its pattern leaves, and textured spheres lost their tint.
     /// </summary>
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
 
     public int FormatVersion { get; set; } = CurrentFormatVersion;
 

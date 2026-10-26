@@ -6,9 +6,9 @@ namespace EvolutionaryOrganic.Core.Genetics.Imaging;
 public abstract class ImageGene
 {
     /// <summary>Image trees larger than this are pruned after mutation, which bounds the cost of baking them.</summary>
-    public const int MaxNodes = 14;
+    public const int MaxNodes = 20;
 
-    public const int MaxDepth = 6;
+    public const int MaxDepth = 7;
 
     public ImageNode Pattern { get; set; } = new NoiseImageNode();
 
@@ -32,23 +32,15 @@ public abstract class ImageGene
     public abstract IEnumerable<GeneProperty> DescribeProperties();
 }
 
-/// <summary>A colour texture: the pattern's greyscale values are mapped onto a gradient of colours.</summary>
+/// <summary>A colour texture: each of the pattern's leaves maps its values onto its own gradient of colours.</summary>
 public sealed class TextureGene : ImageGene
 {
-    public const int MaxStops = 4;
-
-    /// <summary>Colours spaced evenly along the gradient, from the pattern's darkest value to its lightest.</summary>
-    public List<HsvColor> Palette { get; set; } = [new(30f, 0.5f, 0.3f), new(40f, 0.3f, 1f)];
-
     [JsonIgnore]
     public override string Kind => "Texture";
 
-    public TextureGene DeepClone() => new() { Pattern = Pattern.DeepClone(), Palette = [.. Palette] };
+    public TextureGene DeepClone() => new() { Pattern = Pattern.DeepClone() };
 
-    public override IEnumerable<GeneProperty> DescribeProperties()
-    {
-        foreach (var color in Palette) yield return new("Palette", color.ToString());
-    }
+    public override IEnumerable<GeneProperty> DescribeProperties() => [];
 }
 
 /// <summary>A bump map: the pattern is a height field that perturbs the surface normals.</summary>

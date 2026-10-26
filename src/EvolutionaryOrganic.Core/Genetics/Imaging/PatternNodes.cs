@@ -34,9 +34,10 @@ public sealed class NoiseImageNode : PatternImageNode
     [JsonIgnore]
     public override string DisplayName => $"{Style} noise";
 
-    public override ImageNode DeepClone() => new NoiseImageNode { Frequency = Frequency, Seed = Seed, Style = Style, Octaves = Octaves };
+    public override ImageNode DeepClone() =>
+        CopyPaletteTo(new NoiseImageNode { Frequency = Frequency, Seed = Seed, Style = Style, Octaves = Octaves });
 
-    public override IEnumerable<GeneProperty> DescribeProperties()
+    protected override IEnumerable<GeneProperty> DescribePattern()
     {
         yield return new("Frequency", Frequency.ToString("0.##"));
         yield return new("Octaves", Octaves.ToString());
@@ -61,9 +62,9 @@ public sealed class CellsImageNode : PatternImageNode
     [JsonIgnore]
     public override string DisplayName => $"Cells ({Style.ToString().ToLowerInvariant()})";
 
-    public override ImageNode DeepClone() => new CellsImageNode { Frequency = Frequency, Seed = Seed, Style = Style };
+    public override ImageNode DeepClone() => CopyPaletteTo(new CellsImageNode { Frequency = Frequency, Seed = Seed, Style = Style });
 
-    public override IEnumerable<GeneProperty> DescribeProperties()
+    protected override IEnumerable<GeneProperty> DescribePattern()
     {
         yield return new("Frequency", Frequency.ToString("0.##"));
         yield return new("Seed", Seed.ToString());
@@ -96,9 +97,9 @@ public sealed class WavesImageNode : PatternImageNode
     public override string DisplayName => Twist == 0 ? "Bands" : "Spiral";
 
     public override ImageNode DeepClone() =>
-        new WavesImageNode { Frequency = Frequency, Seed = Seed, Axis = Axis, Twist = Twist, Phase = Phase };
+        CopyPaletteTo(new WavesImageNode { Frequency = Frequency, Seed = Seed, Axis = Axis, Twist = Twist, Phase = Phase });
 
-    public override IEnumerable<GeneProperty> DescribeProperties()
+    protected override IEnumerable<GeneProperty> DescribePattern()
     {
         yield return new("Frequency", Frequency.ToString("0.##"));
         yield return new("Axis", $"({Axis.X:0.##}, {Axis.Y:0.##}, {Axis.Z:0.##})");

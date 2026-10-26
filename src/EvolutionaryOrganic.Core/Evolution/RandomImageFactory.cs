@@ -9,67 +9,87 @@ public static class RandomImageFactory
 {
     public static TextureGene CreateTexture(Random rng)
     {
-        // A dark-to-light ramp around one hue reads clearly as a pattern; extra stops add accents.
-        float hue = rng.NextFloat(0f, 360f);
-        int stops = rng.Chance(0.6) ? 2 : rng.Next(3, TextureGene.MaxStops + 1);
-        var palette = new List<HsvColor>(stops);
-        for (int i = 0; i < stops; i++)
-        {
-            float t = stops == 1 ? 1f : (float)i / (stops - 1);
-            palette.Add(new HsvColor(
-                hue + rng.NextGaussian() * 40f,
-                rng.NextFloat(0.15f, 0.85f),
-                0.15f + t * 0.8f + rng.NextGaussian() * 0.08f).Normalized());
-        }
-        return new TextureGene { Pattern = CreateImage(rng, rng.Next(0, 3)), Palette = palette };
+        var gene = new TextureGene { Pattern = CreateImage(rng, rng.Next(2, 4), rng.NextFloat(0f, 360f), operationAtRoot: true) };
+        ImageMutator.Prune(gene, rng);
+        return gene;
     }
 
-    public static BumpGene CreateBumpMap(Random rng) => new()
+    public static BumpGene CreateBumpMap(Random rng)
     {
-        Pattern = CreateImage(rng, rng.Next(0, 3)),
-        Depth = rng.NextFloat(0.01f, 0.08f),
-    };
+        var gene = new BumpGene { Pattern = CreateImage(rng, rng.Next(2, 4), hue: null, operationAtRoot: true), Depth = rng.NextFloat(0.01f, 0.08f) };
+        ImageMutator.Prune(gene, rng);
+        return gene;
+    }
 
-    /// <summary>Creates a random image tree with at most <paramref name="depth"/> levels of operations above its leaves.</summary>
-    public static ImageNode CreateImage(Random rng, int depth)
+    /// <summary>
+    /// Creates a random image tree with at most <paramref name="depth"/> levels of operations above its leaves.
+    /// Leaves are coloured around <paramref name="hue"/>, or left greyscale if it is null (for bump maps).
+    /// </summary>
+    public static ImageNode CreateImage(Random rng, int depth, float? hue, bool operationAtRoot = false)
     {
-        if (depth <= 0) return CreatePattern(rng);
+        if (depth <= 0) return CreatePattern(rng, hue);
 
-        return rng.PickWeighted(0.25, 0.2, 0.1, 0.2, 0.15, 0.1) switch
+        return rng.PickWeighted(operationAtRoot ? 0 : 0.2, 0.18, 0.12, 0.2, 0.18, 0.12) switch
         {
-            0 => CreatePattern(rng),
-            1 => CreateWarp(rng, CreateImage(rng, depth - 1)),
-            2 => CreateTransform(rng, CreateImage(rng, depth - 1)),
-            3 => CreateTone(rng, CreateImage(rng, depth - 1)),
-            4 => CreateBlend(rng, CreateImage(rng, depth - 1), CreateImage(rng, depth - 1)),
-            _ => CreateMask(rng, CreateImage(rng, depth - 1), CreateImage(rng, depth - 1), CreateImage(rng, depth - 1)),
+            0 => CreatePattern(rng, hue),
+            1 => CreateWarp(rng, CreateImage(rng, depth - 1, hue)),
+            2 => CreateTransform(rng, CreateImage(rng, depth - 1, hue)),
+            3 => CreateTone(rng, CreateImage(rng, depth - 1, hue)),
+            4 => CreateBlend(rng, CreateImage(rng, depth - 1, hue), CreateImage(rng, depth - 1, hue)),
+            _ => CreateMask(rng, CreateImage(rng, depth - 1, hue), CreateImage(rng, depth - 1, hue), CreateImage(rng, depth - 1, hue)),
         };
     }
 
-    public static PatternImageNode CreatePattern(Random rng) => rng.PickWeighted(0.45, 0.3, 0.25) switch
+    /// <summary>Creates a random pattern, with a palette around <paramref name="hue"/> unless it is null.</summary>
+    public static PatternImageNode CreatePattern(Random rng, float? hue)
     {
-        0 => new NoiseImageNode
+        PatternImageNode pattern = rng.PickWeighted(0.45, 0.3, 0.25) switch
         {
-            Style = (NoiseStyle)rng.Next(3),
-            Frequency = rng.NextFloat(1.5f, 8f),
-            Octaves = rng.Next(1, 5),
-            Seed = rng.Next(),
-        },
-        1 => new CellsImageNode
+            0 => new NoiseImageNode
+            {
+                Style = (NoiseStyle)rng.Next(3),
+                Frequency = rng.NextFloat(1.5f, 8f),
+                Octaves = rng.Next(1, 5),
+                Seed = rng.Next(),
+            },
+            1 => new CellsImageNode
+            {
+                Style = (CellStyle)rng.Next(2),
+                Frequency = rng.NextFloat(2f, 10f),
+                Seed = rng.Next(),
+            },
+            _ => new WavesImageNode
+            {
+                Axis = RandomDirection(rng),
+                Frequency = rng.NextFloat(2f, 14f),
+                Twist = rng.Chance(0.35) ? rng.Next(1, 5) * (rng.Chance(0.5) ? 1 : -1) : 0,
+                Phase = rng.NextFloat(0f, 360f),
+                Seed = rng.Next(),
+            },
+        };
+        if (hue is float h) pattern.Palette = CreatePalette(rng, h);
+        return pattern;
+    }
+
+    /// <summary>
+    /// A dark-to-light ramp near <paramref name="hue"/>, which reads clearly as a pattern; the leaves of one texture
+    /// share a theme hue so their colours belong together, but sometimes one strikes out for contrast.
+    /// </summary>
+    public static List<HsvColor> CreatePalette(Random rng, float hue)
+    {
+        float baseHue = rng.Chance(0.2) ? hue + rng.NextFloat(90f, 270f) : hue + rng.NextGaussian() * 30f;
+        int stops = rng.Chance(0.6) ? 2 : rng.Next(3, PatternImageNode.MaxStops + 1);
+        var palette = new List<HsvColor>(stops);
+        for (int i = 0; i < stops; i++)
         {
-            Style = (CellStyle)rng.Next(2),
-            Frequency = rng.NextFloat(2f, 10f),
-            Seed = rng.Next(),
-        },
-        _ => new WavesImageNode
-        {
-            Axis = RandomDirection(rng),
-            Frequency = rng.NextFloat(2f, 14f),
-            Twist = rng.Chance(0.35) ? rng.Next(1, 5) * (rng.Chance(0.5) ? 1 : -1) : 0,
-            Phase = rng.NextFloat(0f, 360f),
-            Seed = rng.Next(),
-        },
-    };
+            float t = (float)i / (stops - 1);
+            palette.Add(new HsvColor(
+                baseHue + rng.NextGaussian() * 40f,
+                rng.NextFloat(0.15f, 0.9f),
+                0.15f + t * 0.8f + rng.NextGaussian() * 0.08f).Normalized());
+        }
+        return palette;
+    }
 
     public static WarpImageNode CreateWarp(Random rng, ImageNode input) => new()
     {
