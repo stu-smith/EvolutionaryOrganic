@@ -1,0 +1,44 @@
+I've been interested in evolutionary computing for quite a while - in fact, I did my master's degree in Evolutionary and Adaptive Systems at Sussex University.
+
+I came across the evolutionary art of William Latham (https://www.gold.ac.uk/computing/people/w-latham/) ages ago. This project is an homage to one of his art pieces.
+
+Morphogen lets you breed strange, organic 3D sculptures - horns, shells, flowers, crowns and creatures - without modelling anything yourself. You don't design the forms; you choose the ones you like, and evolution does the rest.
+
+
+FEATURES
+
+- Evolve 3D forms by aesthetic selection: you are the fitness function. Pick the creation you like best and a new generation is bred around it.
+- A 3x3 grid of live, fully interactive 3D views: the current creation in the centre, surrounded by eight mutants. Rotate, zoom and pan any of them, or open one full screen.
+- Re-roll a generation you don't like, or step back to undo a selection.
+- Sexual reproduction: keep your favourite creations in a project, then cross any of them with the current creation to breed offspring that mix features of both parents.
+- Fused, organic surfaces: spheres can melt smoothly into one another, from a slight web between beads to a single flowing body - and different parts of a creation can fuse to different degrees.
+- Evolved colour textures and bump maps: procedural patterns (fractal noise, cells, bands and spirals, warped, blended and masked together) that evolve along with the shape. They wrap seamlessly around every surface.
+- Evolving materials: colour, roughness, metalness and clear coat are all part of the genome.
+- High quality real-time rendering: physically based materials, studio reflections, shadows, ambient occlusion and anti-aliasing, all on the GPU.
+- Export high-resolution images (PNG, JPEG or TIFF, up to 16384 pixels per side) from any angle.
+- Save whole projects, or import and export single genomes as human-readable files to share with others.
+- Control how wild evolution gets: adjust the mutation strength and limits on the number of spheres, textures and bump maps.
+- Light and dark themes.
+
+
+HOW IT WORKS
+
+Every creation is grown from a genome. Unlike the linear strings of classic genetic algorithms, a Morphogen genome is a tree:
+
+- Spheres are the leaves and the basic building blocks. Each has a size, a shininess, and either a plain colour or a texture.
+- Groups combine several sub-structures.
+- Linear repeats copy their contents over and over, moving, turning and shrinking a little each time. This produces rows, arcs, spirals and tapering horns.
+- Radial repeats copy their contents around an axis, giving rings, flowers and crowns.
+
+Each node can also shift the colour, size and fusion of everything beneath it, and repeats can compound that shift with every step, so a horn might fade from red to gold, or be solid at its base and beaded at its tip. Repeats nested inside repeats are where the really organic shapes come from.
+
+To develop a creation, the genome is grown into a set of spheres in 3D space. Spheres that fuse are treated as smooth distance fields that blend into one another, and are turned into a single mesh. Textures and bump maps are themselves small trees of image operations - patterns, filters and combiners - which are baked into images and wrapped onto the surfaces.
+
+Mutation makes both small and large changes. Small changes nudge numbers: a slightly bigger sphere, a few more repeats, a tighter spiral, a shifted hue. Large changes alter the structure: wrapping part of the creation in a new repeat, removing or duplicating branches, swapping one kind of repeat for another, or adding and reshaping textures. Crossover takes a copy of one parent and grafts in a branch of the other, along with any textures it uses.
+
+Then it's up to you. Each generation you pick the one that catches your eye, and over a few dozen generations the forms drift in directions no one planned.
+
+
+REQUIREMENTS
+
+Windows, with a Direct3D 11 capable graphics card.
