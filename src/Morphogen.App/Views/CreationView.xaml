@@ -1,0 +1,55 @@
+<UserControl x:Class="Morphogen.App.Views.CreationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
+             xmlns:r="clr-namespace:Morphogen.App.Rendering">
+    <hx:Viewport3DX x:Name="Viewport"
+                    EffectsManager="{StaticResource EffectsManager}"
+                    BackgroundColor="{Binding BackgroundColor, Source={x:Static r:ViewerOptions.Instance}}"
+                    MSAA="{Binding MsaaLevel, Source={x:Static r:ViewerOptions.Instance}}"
+                    EnableSSAO="{Binding EnableAmbientOcclusion, Source={x:Static r:ViewerOptions.Instance}}"
+                    IsShadowMappingEnabled="{Binding EnableShadows, Source={x:Static r:ViewerOptions.Instance}}"
+                    SSAOQuality="High"
+                    SSAOSamplingRadius="0.25"
+                    SSAOIntensity="1.4"
+                    ShowViewCube="False"
+                    ShowCoordinateSystem="False"
+                    ShowCameraTarget="False"
+                    UseDefaultGestures="False"
+                    CameraRotationMode="Trackball"
+                    RotationSensitivity="1.2"
+                    IsInertiaEnabled="True"
+                    CameraInertiaFactor="0.88"
+                    IsPanEnabled="True"
+                    IsZoomEnabled="True"
+                    ZoomSensitivity="0.6"
+                    ZoomDistanceLimitNear="0.4"
+                    ZoomDistanceLimitFar="25"
+                    ZoomExtentsWhenLoaded="False"
+                    EnableMouseButtonHitTest="False"
+                    CameraChanged="OnCameraChanged"
+                    MouseDoubleClick="OnViewportDoubleClick">
+        <hx:Viewport3DX.InputBindings>
+            <MouseBinding Command="hx:ViewportCommands.Rotate" Gesture="LeftClick" />
+            <MouseBinding Command="hx:ViewportCommands.Pan" Gesture="MiddleClick" />
+            <MouseBinding Command="hx:ViewportCommands.Pan" Gesture="Shift+LeftClick" />
+            <MouseBinding Command="hx:ViewportCommands.Zoom" Gesture="RightClick" />
+        </hx:Viewport3DX.InputBindings>
+
+        <hx:Viewport3DX.Camera>
+            <hx:PerspectiveCamera x:Name="Camera" NearPlaneDistance="0.05" FarPlaneDistance="100" />
+        </hx:Viewport3DX.Camera>
+
+        <!-- Lighting rig: re-aimed relative to the camera whenever it moves (see code-behind),
+             so the creation is always lit like a studio photograph. -->
+        <hx:AmbientLight3D Color="#16171A" />
+        <hx:DirectionalLight3D x:Name="KeyLight" Color="#F4EDE2" />
+        <hx:DirectionalLight3D x:Name="FillLight" Color="#4C5563" />
+        <hx:DirectionalLight3D x:Name="RimLight" Color="#9A948C" />
+        <hx:ShadowMap3D x:Name="Shadows" Resolution="2048,2048" Bias="0.0012" Intensity="0.55" AutoCoverCompleteScene="True" />
+        <hx:EnvironmentMap3D x:Name="Environment" SkipRendering="True" />
+
+        <!-- One instanced model per distinct material (roughness level, texture and bump map); see code-behind. -->
+        <hx:GroupModel3D x:Name="SpheresGroup" />
+    </hx:Viewport3DX>
+</UserControl>

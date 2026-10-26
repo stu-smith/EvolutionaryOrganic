@@ -1,0 +1,32 @@
+<Window x:Class="Morphogen.App.Views.FullScreenWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:Morphogen.App.Views"
+        Title="{Binding Title}"
+        WindowStyle="None" ResizeMode="NoResize" WindowState="Maximized"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="Close" />
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="Close" Executed="OnClose" />
+    </Window.CommandBindings>
+
+    <Grid>
+        <v:CreationView Morphology="{Binding Morphology}" />
+
+        <StackPanel Margin="16,12" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
+            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Details}" Style="{StaticResource SecondaryText}" />
+        </StackPanel>
+
+        <Button Command="Close" Margin="12" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Top"
+                ToolTip="Close full screen (Esc)">
+            <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" />
+        </Button>
+
+        <TextBlock Margin="16,12" HorizontalAlignment="Center" VerticalAlignment="Bottom" IsHitTestVisible="False"
+                   Style="{StaticResource SecondaryText}"
+                   Text="Drag to rotate · wheel or right-drag to zoom · middle or Shift-drag to pan · double-click to reset view · Esc to close" />
+    </Grid>
+</Window>

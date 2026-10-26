@@ -1,4 +1,4 @@
-# Evolutionary Organic
+# Morphogen
 
 Breed 3D organic forms through aesthetic selection, in the spirit of William Latham's *Mutator* and *FormSynth*.
 
@@ -16,8 +16,8 @@ makes it the current creation.
 Requires the .NET 10 SDK on Windows with a Direct3D 11 capable GPU.
 
 ```
-dotnet build EvolutionaryOrganic.sln
-dotnet run --project src/EvolutionaryOrganic.App
+dotnet build Morphogen.sln
+dotnet run --project src/Morphogen.App
 dotnet test
 ```
 
@@ -31,7 +31,7 @@ The solution can also be opened in Visual Studio 2022 17.14+ / Visual Studio 202
 | Zoom | Mouse wheel, or right-drag |
 | Pan | Middle-drag, or Shift + left-drag |
 | Reset a view | Double-click it |
-| New / open / save project | File → New project (Ctrl+Shift+N) / Open project (Ctrl+O) / Save project (Ctrl+S), Save as (Ctrl+Shift+S): `.organic.json` |
+| New / open / save project | File → New project (Ctrl+Shift+N) / Open project (Ctrl+O) / Save project (Ctrl+S), Save as (Ctrl+Shift+S): `.morphogen.json` |
 | Keep a creation in the project | Keep button on any of the nine creations |
 | Cross a kept genome with the current creation | Combine button in the project list |
 | New random creation | File → New random creation (Ctrl+N) |
@@ -44,7 +44,7 @@ The solution can also be opened in Visual Studio 2022 17.14+ / Visual Studio 202
 
 ## Genome model
 
-A genome (`src/EvolutionaryOrganic.Core/Genetics`) is a tree rather than a linear string:
+A genome (`src/Morphogen.Core/Genetics`) is a tree rather than a linear string:
 
 - **Sphere**: the leaf and the visual building block. It has a radius, a roughness (shiny to matte), and either a
   plain HSV colour or a reference to one of the genome's colour textures, never both. It can also refer to a bump map.
@@ -108,7 +108,7 @@ show; metalness and clear coat are each inherited from either parent, and someti
 for one of the other parent's. Offspring are pruned to the same limits as mutants, and are always different from both
 parents.
 
-A project file (`.organic.json`) holds the kept genomes and the current creation, each in the same format as a
+A project file (`.morphogen.json`) holds the kept genomes and the current creation, each in the same format as a
 `.genome.json` file.
 
 Genome files from before textures (format version 1) still load: their whole-creation roughness is copied onto every
@@ -131,7 +131,7 @@ Rendering uses [HelixToolkit.Wpf.SharpDX](https://github.com/helix-toolkit/helix
 ## Project layout
 
 ```
-src/EvolutionaryOrganic.Core     Genome model, development (genome → spheres), mutation, JSON serialization
-src/EvolutionaryOrganic.App      WPF app: views, view models, rendering, settings and theming
-tests/EvolutionaryOrganic.Core.Tests
+src/Morphogen.Core     Genome model, development (genome → spheres), mutation, JSON serialization
+src/Morphogen.App      WPF app: views, view models, rendering, settings and theming
+tests/Morphogen.Core.Tests
 ```
