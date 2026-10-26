@@ -19,6 +19,8 @@ public static class RandomGenomeFactory
             long count = MorphologyBuilder.EstimateSphereCount(root);
             if ((count >= 12 && count <= maxSpheres) || attempt > 50)
             {
+                // Some whole creations fuse; otherwise fusion arises in parts of them (see CreateNode).
+                if (root.Fusion is null && rng.Chance(0.2)) root.Fusion = CreateFusion(rng);
                 var genome = new Genome { Root = root, Surface = CreateSurface(rng) };
                 if (maxTextures > 0 && rng.Chance(0.5))
                 {
@@ -40,16 +42,20 @@ public static class RandomGenomeFactory
     /// <summary>Creates a random subtree with at most <paramref name="depth"/> levels of nesting.</summary>
     public static GenomeNode CreateNode(Random rng, int depth)
     {
-        if (depth <= 0) return CreateSphere(rng);
-
-        return rng.PickWeighted(0.45, 0.3, 0.12, 0.13) switch
-        {
-            0 => CreateLinearRepeat(rng, CreateNode(rng, depth - 1)),
-            1 => CreateRadialRepeat(rng, CreateNode(rng, depth - 1)),
-            2 => CreateGroup(rng, depth - 1),
-            _ => CreateSphere(rng),
-        };
+        GenomeNode node = depth <= 0
+            ? CreateSphere(rng)
+            : rng.PickWeighted(0.45, 0.3, 0.12, 0.13) switch
+            {
+                0 => CreateLinearRepeat(rng, CreateNode(rng, depth - 1)),
+                1 => CreateRadialRepeat(rng, CreateNode(rng, depth - 1)),
+                2 => CreateGroup(rng, depth - 1),
+                _ => CreateSphere(rng),
+            };
+        if (rng.Chance(0.1)) node.Fusion = CreateFusion(rng);
+        return node;
     }
+
+    public static float CreateFusion(Random rng) => rng.NextFloat(0.2f, 1f);
 
     public static SphereNode CreateSphere(Random rng) => new()
     {
@@ -107,5 +113,6 @@ public static class RandomGenomeFactory
         SaturationScale = 1f + rng.NextGaussian() * 0.03f,
         ValueScale = 1f + rng.NextGaussian() * 0.03f,
         SizeScale = rng.Chance(0.5) ? 1f + rng.NextGaussian() * 0.05f : 1f,
+        FusionScale = rng.Chance(0.25) ? Math.Clamp(1f + rng.NextGaussian() * 0.1f, 0.7f, 1.3f) : 1f,
     };
 }

@@ -40,6 +40,8 @@ public static class GenomeSerializer
         }
         if (genome.Root is null) throw new InvalidDataException("The genome has no root node.");
         if (genome.FormatVersion < 2) MigrateFromVersion1(genome, json);
+        // Version 3 only added genes whose absence means "off", so nothing else needs migrating.
+        genome.FormatVersion = Genome.CurrentFormatVersion;
         genome.Textures ??= [];
         genome.BumpMaps ??= [];
         return genome;
@@ -52,7 +54,6 @@ public static class GenomeSerializer
         {
             foreach (var sphere in genome.Root.DescendantsAndSelf().OfType<SphereNode>()) sphere.Roughness = roughness;
         }
-        genome.FormatVersion = Genome.CurrentFormatVersion;
     }
 
     public static void Save(Genome genome, string path) => File.WriteAllText(path, Serialize(genome));

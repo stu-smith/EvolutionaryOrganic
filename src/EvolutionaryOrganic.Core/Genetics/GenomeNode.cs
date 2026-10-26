@@ -22,6 +22,17 @@ public abstract class GenomeNode
     /// <summary>Property transform applied once to everything in this subtree.</summary>
     public PropertyModifier Modifier { get; set; } = PropertyModifier.None;
 
+    /// <summary>
+    /// How far the spheres in this subtree flow into one another, as a fraction of each sphere's radius:
+    /// 0 keeps them separate, around 1 melts them into one body. Null inherits the parent's fusion. Fusion
+    /// scales in <see cref="Modifier"/>s, including those of ancestors, still apply beneath a node that sets it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? Fusion { get; set; }
+
+    /// <summary>The highest effective fusion; beyond it shapes dissolve into featureless blobs.</summary>
+    public const float MaxFusion = 1.5f;
+
     [JsonIgnore]
     public abstract string DisplayName { get; }
 
@@ -35,6 +46,7 @@ public abstract class GenomeNode
 
     public virtual IEnumerable<GeneProperty> DescribeProperties()
     {
+        if (Fusion is float fusion) yield return new("Fusion", fusion.ToString("0.00"));
         foreach (var part in Offset.DescribeParts()) yield return new("Offset", part);
         foreach (var part in Modifier.DescribeParts()) yield return new("Modifier", part);
     }
@@ -72,6 +84,7 @@ public abstract class GenomeNode
     {
         clone.Offset = Offset;
         clone.Modifier = Modifier;
+        clone.Fusion = Fusion;
         return clone;
     }
 }

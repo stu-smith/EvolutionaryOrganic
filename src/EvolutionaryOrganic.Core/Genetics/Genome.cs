@@ -23,8 +23,11 @@ public sealed record SurfaceGenes
 /// </summary>
 public sealed class Genome
 {
-    /// <summary>Version 2 moved roughness from <see cref="SurfaceGenes"/> to each sphere, and added textures and bump maps.</summary>
-    public const int CurrentFormatVersion = 2;
+    /// <summary>
+    /// Version 2 moved roughness from <see cref="SurfaceGenes"/> to each sphere, and added textures and bump maps.
+    /// Version 3 added fusion; older genomes have none, so they read unchanged.
+    /// </summary>
+    public const int CurrentFormatVersion = 3;
 
     public int FormatVersion { get; set; } = CurrentFormatVersion;
 

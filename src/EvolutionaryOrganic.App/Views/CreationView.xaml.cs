@@ -7,10 +7,12 @@ using System.Windows.Media.Media3D;
 using EvolutionaryOrganic.App.Rendering;
 using EvolutionaryOrganic.Core.Development;
 using EvolutionaryOrganic.Core.Genetics;
+using HelixToolkit;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX.Direct3D11;
+using MeshGeometry3D = HelixToolkit.SharpDX.MeshGeometry3D;
 using PBRMaterial = HelixToolkit.Wpf.SharpDX.PBRMaterial;
 
 namespace EvolutionaryOrganic.App.Views;
@@ -101,13 +103,15 @@ public partial class CreationView : UserControl
         float scale = 1f / morphology.BoundingRadius;
         var center = morphology.Center;
         var spheres = morphology.Spheres;
-        _framing = new Vector4[spheres.Count];
+        var framing = new List<Vector4>(spheres.Count);
         var batches = new Dictionary<MaterialKey, (List<Matrix4x4> Matrices, List<InstanceParameter> Parameters)>();
         for (int i = 0; i < spheres.Count; i++)
         {
             var s = spheres[i];
             var position = (s.Position - center) * scale;
-            _framing[i] = new Vector4(position, s.Radius * scale);
+            framing.Add(new Vector4(position, s.Radius * scale));
+            // Fused spheres are drawn as part of their surface below.
+            if (morphology.FusedSpheres.Contains(i)) continue;
 
             var key = new MaterialKey((int)MathF.Round(s.Roughness * (RoughnessLevels - 1)), s.Texture, s.BumpMap);
             if (!batches.TryGetValue(key, out var batch))
@@ -126,7 +130,7 @@ public partial class CreationView : UserControl
             });
         }
 
-        var geometry = SphereMeshes.ForSphereCount(spheres.Count);
+        var geometry = SphereMeshes.ForSphereCount(spheres.Count - morphology.FusedSpheres.Count);
         foreach (var (key, batch) in batches)
         {
             SpheresGroup.Children.Add(new InstancingMeshGeometryModel3D
@@ -139,7 +143,51 @@ public partial class CreationView : UserControl
                 CullMode = CullMode.Back,
             });
         }
+
+        foreach (var surface in morphology.Surfaces)
+        {
+            foreach (var model in CreateSurfaceModels(surface, morphology.Surface, center, scale)) SpheresGroup.Children.Add(model);
+            // Bumps can raise a surface beyond its spheres; a sample of its vertices is plenty to frame it.
+            for (int i = 0; i < surface.Positions.Length; i += 16) framing.Add(new Vector4((surface.Positions[i] - center) * scale, 0f));
+        }
+        _framing = [.. framing];
         ResetCamera(animate: false);
+    }
+
+    /// <summary>
+    /// Builds a fused surface as one model per roughness level, like the sphere batches, since roughness is a
+    /// material constant. Each triangle takes the level of its vertices' mean roughness; colour comes from the vertices.
+    /// </summary>
+    private static IEnumerable<MeshGeometryModel3D> CreateSurfaceModels(FusedSurface surface, SurfaceGenes genes, Vector3 center, float scale)
+    {
+        var positions = new Vector3Collection(surface.Positions.Select(p => (p - center) * scale));
+        var normals = new Vector3Collection(surface.Normals);
+        var colors = new Color4Collection(surface.Colors.Select(c => new Color4(c.X, c.Y, c.Z, 1f)));
+
+        var levels = new Dictionary<int, IntCollection>();
+        var indices = surface.Indices;
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            float roughness = (surface.Roughness[indices[i]] + surface.Roughness[indices[i + 1]] + surface.Roughness[indices[i + 2]]) / 3f;
+            int level = (int)MathF.Round(Math.Clamp(roughness, 0f, 1f) * (RoughnessLevels - 1));
+            if (!levels.TryGetValue(level, out var triangles)) levels.Add(level, triangles = []);
+            triangles.Add(indices[i]);
+            triangles.Add(indices[i + 1]);
+            triangles.Add(indices[i + 2]);
+        }
+
+        foreach (var (level, triangles) in levels)
+        {
+            var material = CreateMaterial(genes, new MaterialKey(level, -1, -1), [], []);
+            material.VertexColorBlendingFactor = 1;
+            yield return new MeshGeometryModel3D
+            {
+                Geometry = new MeshGeometry3D { Positions = positions, Normals = normals, Colors = colors, Indices = triangles },
+                Material = material,
+                IsThrowingShadow = true,
+                CullMode = CullMode.Back,
+            };
+        }
     }
 
     private static PBRMaterial CreateMaterial(SurfaceGenes surface, MaterialKey key, TextureModel?[] textures, TextureModel?[] bumpMaps) => new()

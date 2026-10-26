@@ -64,7 +64,8 @@ public sealed partial class CreationSlotViewModel : ObservableObject
 
     public string Details => Morphology is null
         ? string.Empty
-        : $"{Morphology.Spheres.Count:N0} spheres{(Morphology.Truncated ? " (capped)" : string.Empty)}";
+        : $"{Morphology.Spheres.Count:N0} spheres{(Morphology.Truncated ? " (capped)" : string.Empty)}"
+          + (Morphology.FusedSpheres.Count > 0 ? $", {Morphology.FusedSpheres.Count:N0} fused" : string.Empty);
 
     public void SetCreation(Genome genome, Morphology morphology, bool isKept)
     {

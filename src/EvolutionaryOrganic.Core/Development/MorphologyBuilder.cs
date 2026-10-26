@@ -19,7 +19,8 @@ public static class MorphologyBuilder
         var bumpMaps = genome.BumpMaps
             .Select((gene, i) => walker.Spheres.Any(s => s.BumpMap == i) ? ImageBaker.BakeBumpMap(gene, limits.TextureSize) : null)
             .ToList();
-        return new Morphology(walker.Spheres, walker.Truncated, genome.Surface, textures, bumpMaps);
+        var surfaces = FusedSurfaceBuilder.Build(walker.Spheres, textures, genome.BumpMaps, limits);
+        return new Morphology(walker.Spheres, walker.Truncated, genome.Surface, textures, bumpMaps, surfaces);
     }
 
     /// <summary>
@@ -38,10 +39,16 @@ public static class MorphologyBuilder
         return Math.Min(count, cap);
     }
 
-    /// <summary>Accumulated property transforms inherited from ancestors.</summary>
-    private readonly record struct PropertyState(float Hue, float Saturation, float Value, float Size)
+    /// <summary>
+    /// Accumulated property transforms inherited from ancestors. Fusion is kept as the nearest ancestor's
+    /// <see cref="GenomeNode.Fusion"/> and, separately, the product of every fusion scale above, so a subtree
+    /// that sets its own fusion still follows the gradients of the repeats it sits in.
+    /// </summary>
+    private readonly record struct PropertyState(float Hue, float Saturation, float Value, float Size, float Fusion, float FusionScale)
     {
-        public static PropertyState Initial => new(0f, 1f, 1f, 1f);
+        public static PropertyState Initial => new(0f, 1f, 1f, 1f, 0f, 1f);
+
+        public float EffectiveFusion => Math.Clamp(Fusion * FusionScale, 0f, GenomeNode.MaxFusion);
 
         public PropertyState Apply(PropertyModifier m, int times = 1)
         {
@@ -50,7 +57,9 @@ public static class MorphologyBuilder
                 Hue + m.HueShift * times,
                 Saturation * MathF.Pow(m.SaturationScale, times),
                 Value * MathF.Pow(m.ValueScale, times),
-                Size * MathF.Pow(m.SizeScale, times));
+                Size * MathF.Pow(m.SizeScale, times),
+                Fusion,
+                FusionScale * MathF.Pow(m.FusionScale, times));
         }
     }
 
@@ -72,6 +81,7 @@ public static class MorphologyBuilder
             var world = node.Offset.ToMatrix() * parentWorld;
             float scale = parentScale * node.Offset.Scale;
             if (scale < limits.MinRadius) return;
+            if (node.Fusion is float fusion) props = props with { Fusion = fusion };
             props = props.Apply(node.Modifier);
 
             switch (node)
@@ -88,7 +98,8 @@ public static class MorphologyBuilder
                         orientation,
                         Math.Clamp(sphere.Roughness, 0f, 1f),
                         ValidIndex(sphere.Texture, textureCount),
-                        ValidIndex(sphere.BumpMap, bumpMapCount)));
+                        ValidIndex(sphere.BumpMap, bumpMapCount),
+                        props.EffectiveFusion));
                     break;
 
                 case GroupNode group:

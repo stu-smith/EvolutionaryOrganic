@@ -55,9 +55,23 @@ A genome (`src/EvolutionaryOrganic.Core/Genetics`) is a tree rather than a linea
   This gives rings, flowers and crowns.
 
 Every node has an **offset** (placement relative to its parent) and a **modifier**, which is a transform on the
-*properties* of everything below it (hue shift, saturation, brightness, sphere size). Repeat nodes also have a
+*properties* of everything below it (hue shift, saturation, brightness, sphere size, fusion). Repeat nodes also have a
 **per-step modifier** that compounds with each iteration, which produces colour and size gradients along a horn
 or around a ring. A genome also carries whole-creation **surface genes**: metalness and clear coat.
+
+### Fusion
+
+Any node can carry a **fusion** gene, which makes the spheres beneath it flow into one another instead of meeting at
+hard creases. It is a fraction of each sphere's radius: around 0.2 grows a slight web where spheres meet, around 1
+melts them into one body. A node without one inherits its parent's fusion, so different branches of a creation can
+fuse to different degrees, and a fusion of 0 keeps a branch crisp inside a fused body. Modifiers also have a
+**fusion scale**, so a repeat's per-step modifier can make a horn solid at its base and beaded at its tip.
+
+Each sphere is treated as a signed distance field, and touching spheres are joined with a smooth minimum whose blend
+radius is about the smaller of the two spheres' fusion × radius. A sphere on its own keeps exactly its radius. Clusters of
+fused spheres are meshed with surface nets (`Development/FusedSurfaceBuilder`), and colour, roughness, textures and
+bumps are blended across each join. On fused surfaces, textures are sampled per vertex and bump maps displace the
+mesh, so detail finer than the mesh is lost; spheres that do not fuse are drawn exactly as before.
 
 ### Textures and bump maps
 

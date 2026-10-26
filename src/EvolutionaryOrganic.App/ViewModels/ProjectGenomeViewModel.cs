@@ -38,5 +38,6 @@ public sealed partial class ProjectGenomeViewModel : ObservableObject
 
     public string Details => Morphology is null
         ? (Error is null ? "Growing…" : string.Empty)
-        : $"{Morphology.Spheres.Count:N0} spheres{(Morphology.Truncated ? " (capped)" : string.Empty)}";
+        : $"{Morphology.Spheres.Count:N0} spheres{(Morphology.Truncated ? " (capped)" : string.Empty)}"
+          + (Morphology.FusedSpheres.Count > 0 ? $", {Morphology.FusedSpheres.Count:N0} fused" : string.Empty);
 }

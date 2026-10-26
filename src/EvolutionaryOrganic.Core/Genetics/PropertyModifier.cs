@@ -26,8 +26,11 @@ public sealed record PropertyModifier
     /// </summary>
     public float SizeScale { get; init; } = 1f;
 
+    /// <summary>Multiplier applied to fusion (see <see cref="GenomeNode.Fusion"/>), so parts can melt together by degrees.</summary>
+    public float FusionScale { get; init; } = 1f;
+
     [JsonIgnore]
-    public bool IsNone => HueShift == 0f && SaturationScale == 1f && ValueScale == 1f && SizeScale == 1f;
+    public bool IsNone => HueShift == 0f && SaturationScale == 1f && ValueScale == 1f && SizeScale == 1f && FusionScale == 1f;
 
     /// <summary>The non-neutral components, each as a short phrase.</summary>
     public IEnumerable<string> DescribeParts()
@@ -36,6 +39,7 @@ public sealed record PropertyModifier
         if (SaturationScale != 1f) yield return $"saturation ×{SaturationScale:0.###}";
         if (ValueScale != 1f) yield return $"brightness ×{ValueScale:0.###}";
         if (SizeScale != 1f) yield return $"size ×{SizeScale:0.###}";
+        if (FusionScale != 1f) yield return $"fusion ×{FusionScale:0.###}";
     }
 
     public override string ToString() => IsNone ? "none" : string.Join(", ", DescribeParts());

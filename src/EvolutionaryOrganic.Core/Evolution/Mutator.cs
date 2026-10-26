@@ -81,12 +81,20 @@ public static class Mutator
 
         var nodes = genome.Root.DescendantsAndSelf().ToList();
         var node = rng.Pick(nodes);
+        // Fusion scales only show once something in the creation fuses.
+        bool fuses = nodes.Any(n => n.Fusion > 0f);
+
+        if (rng.Chance(0.1))
+        {
+            node.Fusion = MutateFusion(node.Fusion, rng, s);
+            return;
+        }
 
         // Mutations of the node's own genes are more common than of its placement.
         if (rng.Chance(0.25))
         {
             if (rng.Chance(0.7)) node.Offset = Jiggle(node.Offset, rng, s);
-            else node.Modifier = Jiggle(node.Modifier, rng, s, isStep: false);
+            else node.Modifier = Jiggle(node.Modifier, rng, s, isStep: false, fuses);
             return;
         }
 
@@ -107,7 +115,7 @@ public static class Mutator
                 {
                     case 0: linear.Count = JiggleCount(linear.Count, rng, s); break;
                     case 1: linear.Step = Jiggle(linear.Step, rng, s, isStep: true); break;
-                    case 2: linear.StepModifier = Jiggle(linear.StepModifier, rng, s, isStep: true); break;
+                    case 2: linear.StepModifier = Jiggle(linear.StepModifier, rng, s, isStep: true, fuses); break;
                     default: linear.Step = linear.Step with { Rotation = linear.Step.Rotation + RandomVector(rng) * 8f * s }; break;
                 }
                 break;
@@ -119,7 +127,7 @@ public static class Mutator
                     case 1: radial.Radius = Math.Clamp(radial.Radius * MathF.Exp(rng.NextGaussian() * 0.25f * s), 0f, 6f); break;
                     case 2: radial.Tilt = Math.Clamp(radial.Tilt + rng.NextGaussian() * 25f * s, -180f, 180f); break;
                     case 3: radial.Sweep = MutateSweep(radial.Sweep, rng, s); break;
-                    default: radial.StepModifier = Jiggle(radial.StepModifier, rng, s, isStep: true); break;
+                    default: radial.StepModifier = Jiggle(radial.StepModifier, rng, s, isStep: true, fuses); break;
                 }
                 break;
 
@@ -173,11 +181,24 @@ public static class Mutator
         };
     }
 
-    private static PropertyModifier Jiggle(PropertyModifier m, Random rng, float s, bool isStep)
+    /// <summary>
+    /// Switches fusion on for a subtree, nudges it, sets it to zero to keep a subtree apart from fused
+    /// surroundings, or clears it so the subtree inherits its parent's fusion again.
+    /// </summary>
+    private static float? MutateFusion(float? fusion, Random rng, float s)
+    {
+        if (fusion is not float f) return rng.Chance(0.25) ? 0f : rng.NextFloat(0.15f, 0.9f);
+        if (rng.Chance(0.15)) return null;
+        if (f == 0f) return rng.NextFloat(0.1f, 0.5f);
+        return Math.Clamp(f + rng.NextGaussian() * 0.2f * s, 0f, GenomeNode.MaxFusion);
+    }
+
+    private static PropertyModifier Jiggle(PropertyModifier m, Random rng, float s, bool isStep, bool fuses)
     {
         float spread = isStep ? 0.25f : 1f;
-        return rng.Next(4) switch
+        return rng.Next(fuses ? 5 : 4) switch
         {
+            4 => m with { FusionScale = Math.Clamp(m.FusionScale * MathF.Exp(rng.NextGaussian() * 0.3f * s * spread), 0.3f, 3f) },
             0 => m with { HueShift = m.HueShift + rng.NextGaussian() * 30f * s * spread },
             1 => m with { SaturationScale = Math.Clamp(m.SaturationScale * MathF.Exp(rng.NextGaussian() * 0.2f * s * spread), 0.2f, 3f) },
             2 => m with { ValueScale = Math.Clamp(m.ValueScale * MathF.Exp(rng.NextGaussian() * 0.2f * s * spread), 0.2f, 3f) },
