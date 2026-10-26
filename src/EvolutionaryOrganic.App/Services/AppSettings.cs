@@ -43,6 +43,12 @@ public sealed class AppSettings
 
     public bool EnableAntialiasing { get; set; } = true;
 
+    /// <summary>Where the main window was when the app last closed, or null to use the default placement.</summary>
+    public WindowPlacement? MainWindowPlacement { get; set; }
+
+    /// <summary>The saved project that was open when the app last closed, reopened on startup.</summary>
+    public string? LastProjectPath { get; set; }
+
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EvolutionaryOrganic", "settings.json");
 
@@ -70,3 +76,6 @@ public sealed class AppSettings
 
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 }
+
+/// <summary>A window's restored (non-maximised) bounds, and whether it was maximised.</summary>
+public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool IsMaximized);

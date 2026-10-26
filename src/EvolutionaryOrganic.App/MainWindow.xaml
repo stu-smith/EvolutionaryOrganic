@@ -282,7 +282,7 @@
                             <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right" VerticalAlignment="Center"
                                        Text="{Binding MaxSpheres, StringFormat={}{0:N0}}" />
                             <TextBlock Text="Sphere limit" Width="130" VerticalAlignment="Center" />
-                            <Slider Minimum="250" Maximum="10000" SmallChange="250" LargeChange="1000"
+                            <Slider Minimum="250" Maximum="20000" SmallChange="250" LargeChange="1000"
                                     TickFrequency="250" IsSnapToTickEnabled="True"
                                     Value="{Binding MaxSpheres}" />
                         </DockPanel>

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using EvolutionaryOrganic.App.Services;
 using EvolutionaryOrganic.App.ViewModels;
 using EvolutionaryOrganic.App.Views;
 using EvolutionaryOrganic.Core.Serialization;
@@ -30,13 +31,50 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = new MainViewModel(() => App.Current.Settings);
         DataContext = _viewModel;
-        Loaded += (_, _) => _viewModel.Start();
+        RestorePlacement(App.Current.Settings.MainWindowPlacement);
+        Loaded += (_, _) => Start();
     }
 
     protected override void OnClosing(CancelEventArgs e)
     {
         if (!ConfirmDiscardChanges()) e.Cancel = true;
         base.OnClosing(e);
+        if (e.Cancel) return;
+
+        // App.OnExit persists the settings, so record where we were for next time.
+        var settings = App.Current.Settings;
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        settings.MainWindowPlacement = new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+            WindowState == WindowState.Maximized);
+        settings.LastProjectPath = _viewModel.ProjectPath;
+    }
+
+    /// <summary>Puts the window back where it was last time, provided that is still on screen.</summary>
+    private void RestorePlacement(WindowPlacement? placement)
+    {
+        if (placement is null || placement.Width <= 0 || placement.Height <= 0) return;
+
+        var bounds = new Rect(placement.Left, placement.Top, Math.Max(placement.Width, MinWidth), Math.Max(placement.Height, MinHeight));
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var visible = Rect.Intersect(bounds, screen);
+        // A monitor may have been unplugged since; keep the default placement rather than open off screen.
+        if (visible.IsEmpty || visible.Width < 100 || visible.Height < 50) return;
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+        if (placement.IsMaximized) WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>Reopens the project that was open last time, or starts afresh if there wasn't one.</summary>
+    private void Start()
+    {
+        var path = App.Current.Settings.LastProjectPath;
+        if (path is not null && File.Exists(path) && TryOpenProject(path)) return;
+        _viewModel.Start();
     }
 
     private void OnNewProject(object sender, ExecutedRoutedEventArgs e)
@@ -50,14 +88,21 @@ public partial class MainWindow : Window
 
         var dialog = new OpenFileDialog { Title = "Open project", Filter = ProjectFilter };
         if (dialog.ShowDialog(this) != true) return;
+        TryOpenProject(dialog.FileName);
+    }
 
+    /// <summary>Opens the project at <paramref name="path"/>, explaining why if it can't. Returns false if it was not opened.</summary>
+    private bool TryOpenProject(string path)
+    {
         try
         {
-            _viewModel.OpenProject(GenomeSerializer.LoadProject(dialog.FileName), dialog.FileName);
+            _viewModel.OpenProject(GenomeSerializer.LoadProject(path), path);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException)
         {
             MessageBox.Show(this, $"Could not open the project.\n\n{ex.Message}", "Open project", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
         }
     }
 
