@@ -1,0 +1,12 @@
+# Copied into the payload as .itch.toml, where the itch.io app reads it to work out
+# what to run. Ignored by anyone who just unzips the download by hand.
+# https://itch.io/docs/itch/integrating/manifest.html
+
+# "play" is the special one: it becomes the app's main Launch button.
+[[actions]]
+name = "play"
+path = "Morphogen.exe"
+
+[[actions]]
+name = "Read me first"
+path = "readme.txt"

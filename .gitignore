@@ -426,3 +426,7 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# itch.io build output
+installer/itch/obj/
+installer/itch/out/
